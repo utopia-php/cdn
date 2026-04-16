@@ -22,15 +22,13 @@ class Cloudflare implements Adapter
             ->addHeader('Content-Type', Client::CONTENT_TYPE_APPLICATION_JSON);
     }
 
-    public function purgePaths(array $paths): void
+    public function purgeUrls(array $urls): void
     {
-        $files = $paths;
-
-        if ($files === []) {
+        if ($urls === []) {
             return;
         }
 
-        foreach (\array_chunk($files, 30) as $chunk) {
+        foreach (\array_chunk($urls, 30) as $chunk) {
             $result = $this->request(
                 method: Client::METHOD_POST,
                 url: '/zones/' . $this->zoneId . '/purge_cache',
@@ -41,6 +39,15 @@ class Cloudflare implements Adapter
                 throw new \RuntimeException($this->formatError('Cloudflare', $result));
             }
         }
+    }
+
+    public function purgeKeys(array $keys): void
+    {
+        if ($keys === []) {
+            return;
+        }
+
+        throw new \RuntimeException('Cloudflare cache key purging is not supported by this adapter.');
     }
 
     /**

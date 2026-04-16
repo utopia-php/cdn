@@ -8,26 +8,59 @@ use Utopia\Cdn\Cache\Adapter;
 
 class CacheTest extends TestCase
 {
-    public function testPurgeDelegatesToAdapter(): void
+    public function testPurgeUrlsDelegatesToAdapter(): void
     {
         $calls = new \ArrayObject();
 
         $cache = new Cache(new class ($calls) implements Adapter {
             /**
-             * @param \ArrayObject<int, array<int, string>> $calls
+             * @param \ArrayObject<int, array<string, array<int, string>>> $calls
              */
             public function __construct(private \ArrayObject $calls)
             {
             }
 
-            public function purgePaths(array $paths): void
+            public function purgeUrls(array $urls): void
             {
-                $this->calls->append($paths);
+                $this->calls->append(['urls' => $urls]);
+            }
+
+            public function purgeKeys(array $keys): void
+            {
+                $this->calls->append(['keys' => $keys]);
             }
         });
 
-        $cache->purge(['https://example.com/file.png']);
+        $cache->purgeUrls(['https://example.com/file.png']);
 
-        $this->assertSame([['https://example.com/file.png']], $calls->getArrayCopy());
+        $this->assertSame([['urls' => ['https://example.com/file.png']]], $calls->getArrayCopy());
+    }
+
+    public function testPurgeKeysDelegatesToAdapter(): void
+    {
+        $calls = new \ArrayObject();
+
+        $cache = new Cache(new class ($calls) implements Adapter {
+            /**
+             * @param \ArrayObject<int, array<string, array<int, string>>> $calls
+             */
+            public function __construct(private \ArrayObject $calls)
+            {
+            }
+
+            public function purgeUrls(array $urls): void
+            {
+                $this->calls->append(['urls' => $urls]);
+            }
+
+            public function purgeKeys(array $keys): void
+            {
+                $this->calls->append(['keys' => $keys]);
+            }
+        });
+
+        $cache->purgeKeys(['host-deadbeef']);
+
+        $this->assertSame([['keys' => ['host-deadbeef']]], $calls->getArrayCopy());
     }
 }

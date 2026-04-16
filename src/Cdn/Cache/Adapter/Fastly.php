@@ -10,6 +10,7 @@ class Fastly implements Adapter
 {
     public function __construct(
         private string $apiToken,
+        private ?string $serviceId = null,
         private bool $softPurge = false,
         private ?Client $client = null,
         private string $apiBase = 'https://api.fastly.com'
@@ -26,16 +27,33 @@ class Fastly implements Adapter
         }
     }
 
-    public function purgePaths(array $paths): void
+    public function purgeUrls(array $urls): void
     {
-        $urls = $paths;
-
         if ($urls === []) {
             return;
         }
 
         foreach ($urls as $url) {
             $result = $this->request(Client::METHOD_POST, '/purge/' . $url);
+
+            if ($result['statusCode'] < 200 || $result['statusCode'] >= 300) {
+                throw new \RuntimeException($this->formatError($result));
+            }
+        }
+    }
+
+    public function purgeKeys(array $keys): void
+    {
+        if ($keys === []) {
+            return;
+        }
+
+        if ($this->serviceId === null || $this->serviceId === '') {
+            throw new \RuntimeException('Fastly service ID is required for cache key purging.');
+        }
+
+        foreach ($keys as $key) {
+            $result = $this->request(Client::METHOD_POST, '/service/' . $this->serviceId . '/purge/' . $key);
 
             if ($result['statusCode'] < 200 || $result['statusCode'] >= 300) {
                 throw new \RuntimeException($this->formatError($result));

@@ -10,7 +10,7 @@ use Utopia\Tests\Cdn\FetchAdapter;
 
 class CloudflareTest extends TestCase
 {
-    public function testPurgePathsSendsUrlsAsProvided(): void
+    public function testPurgeUrlsSendsUrlsAsProvided(): void
     {
         $adapter = new FetchAdapter([
             new Response(200, '{"success":true}', []),
@@ -18,7 +18,7 @@ class CloudflareTest extends TestCase
         $client = (new Client($adapter))->setBaseUrl('https://api.cloudflare.com/client/v4');
 
         $cdn = new Cloudflare('zone-id', 'token', $client);
-        $cdn->purgePaths(['https://example.com/a', 'https://example.com/b']);
+        $cdn->purgeUrls(['https://example.com/a', 'https://example.com/b']);
 
         $this->assertCount(1, $adapter->calls);
         $this->assertSame('POST', $adapter->calls[0]['method']);
@@ -27,5 +27,17 @@ class CloudflareTest extends TestCase
             '{"files":["https:\/\/example.com\/a","https:\/\/example.com\/b"]}',
             $adapter->calls[0]['body']
         );
+    }
+
+    public function testPurgeKeysThrowsUnsupportedException(): void
+    {
+        $client = (new Client(new FetchAdapter([])))->setBaseUrl('https://api.cloudflare.com/client/v4');
+
+        $cdn = new Cloudflare('zone-id', 'token', $client);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Cloudflare cache key purging is not supported by this adapter.');
+
+        $cdn->purgeKeys(['host-deadbeef']);
     }
 }

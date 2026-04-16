@@ -11,10 +11,18 @@ class Cache
     }
 
     /**
-     * @param array<int, string> $paths
+     * @param array<int, string> $urls
      */
-    public function purge(array $paths): void
+    public function purgeUrls(array $urls): void
     {
-        $this->adapter->purgePaths($paths);
+        $this->adapter->purgeUrls($urls);
+    }
+
+    /**
+     * @param array<int, string> $keys
+     */
+    public function purgeKeys(array $keys): void
+    {
+        $this->adapter->purgeKeys($keys);
     }
 }

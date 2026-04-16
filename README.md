@@ -17,7 +17,12 @@ composer require utopia-php/cdn
 
 ## Cache Purging
 
-Purge APIs in this library expect fully qualified URLs.
+The cache API supports two purge modes:
+
+- URL purges for providers like Cloudflare and Fastly
+- key purges for providers like Fastly
+
+URL purges expect fully qualified URLs.
 
 ### Cloudflare
 
@@ -32,7 +37,7 @@ $cache = new Cache(new Cloudflare(
     apiToken: 'YOUR_API_TOKEN'
 ));
 
-$cache->purge([
+$cache->purgeUrls([
     'https://example.com/files/hero.png',
     'https://example.com/files/logo.svg',
 ]);
@@ -48,12 +53,18 @@ use Utopia\Cdn\Cache\Adapter\Fastly;
 
 $cache = new Cache(new Fastly(
     apiToken: 'YOUR_API_TOKEN',
+    serviceId: 'YOUR_SERVICE_ID',
     softPurge: false
 ));
 
-$cache->purge([
+$cache->purgeUrls([
     'https://example.com/files/hero.png',
     'https://example.com/files/logo.svg',
+]);
+
+$cache->purgeKeys([
+    'host-deadbeef',
+    'deployment-12345',
 ]);
 ```
 
