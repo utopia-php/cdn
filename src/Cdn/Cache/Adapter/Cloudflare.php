@@ -24,7 +24,7 @@ class Cloudflare implements Adapter
 
     public function purgePaths(array $paths): void
     {
-        $files = \array_values(\array_filter($paths, static fn (string $path): bool => \trim($path) !== ''));
+        $files = $paths;
 
         if ($files === []) {
             return;

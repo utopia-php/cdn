@@ -28,7 +28,7 @@ class Fastly implements Adapter
 
     public function purgePaths(array $paths): void
     {
-        $urls = \array_values(\array_filter($paths, static fn (string $path): bool => \trim($path) !== ''));
+        $urls = $paths;
 
         if ($urls === []) {
             return;
