@@ -31,7 +31,7 @@ class FastlyTls implements Provider
 
         if ($subscription === null) {
             $subscription = $this->createSubscription($domain);
-        } elseif (Status::fromFastlyState($subscription['attributes']['state'] ?? '') === Status::FAILED) {
+        } elseif ($this->mapStatus($subscription['attributes']['state'] ?? '') === Status::FAILED) {
             $subscription = $this->retrySubscription($subscription['id']);
         }
 
@@ -51,7 +51,7 @@ class FastlyTls implements Provider
             return Status::UNKNOWN;
         }
 
-        return Status::fromFastlyState($subscription['attributes']['state'] ?? '');
+        return $this->mapStatus($subscription['attributes']['state'] ?? '');
     }
 
     public function isRenewRequired(string $domain, ?string $domainType): bool
@@ -62,7 +62,7 @@ class FastlyTls implements Provider
             return true;
         }
 
-        return Status::fromFastlyState($subscription['attributes']['state'] ?? '') === Status::FAILED;
+        return $this->mapStatus($subscription['attributes']['state'] ?? '') === Status::FAILED;
     }
 
     public function deleteCertificate(string $domain): void
@@ -185,7 +185,7 @@ class FastlyTls implements Provider
      */
     private function extractRenewDate(array $subscription): ?string
     {
-        $state = Status::fromFastlyState($subscription['attributes']['state'] ?? '');
+        $state = $this->mapStatus($subscription['attributes']['state'] ?? '');
 
         if ($state !== Status::ISSUED && $state !== Status::RENEWING) {
             return null;
@@ -256,5 +256,17 @@ class FastlyTls implements Provider
         $message ??= 'Unknown Fastly TLS error';
 
         return $prefix . ' with status ' . $result['statusCode'] . ': ' . $message;
+    }
+
+    private function mapStatus(string $state): string
+    {
+        return match (\strtolower($state)) {
+            'pending' => Status::PENDING,
+            'processing' => Status::PROCESSING,
+            'issued' => Status::ISSUED,
+            'renewing' => Status::RENEWING,
+            'failed' => Status::FAILED,
+            default => Status::UNKNOWN,
+        };
     }
 }
