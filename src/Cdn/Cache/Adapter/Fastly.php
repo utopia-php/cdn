@@ -17,7 +17,6 @@ class Fastly implements Adapter
     ) {
         $this->client ??= new Client();
         $this->client
-            ->setBaseUrl($this->apiBase)
             ->setUserAgent('Utopia CDN Fastly Adapter')
             ->addHeader('Fastly-Key', $this->apiToken)
             ->addHeader('Accept', 'application/json');
@@ -83,7 +82,7 @@ class Fastly implements Adapter
     private function request(string $method, string $url): array
     {
         try {
-            $response = $this->client->fetch(url: $url, method: $method);
+            $response = $this->client->fetch(url: $this->apiBase . $url, method: $method);
 
             return [
                 'statusCode' => $response->getStatusCode(),
@@ -106,7 +105,7 @@ class Fastly implements Adapter
     {
         try {
             return $response->json();
-        } catch (FetchException) {
+        } catch (\Throwable) {
             return $response->text();
         }
     }

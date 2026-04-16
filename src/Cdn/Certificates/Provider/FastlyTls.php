@@ -18,7 +18,6 @@ class FastlyTls implements Provider
     ) {
         $this->client ??= new Client();
         $this->client
-            ->setBaseUrl($this->apiBase)
             ->setUserAgent('Utopia CDN Fastly TLS Provider')
             ->addHeader('Fastly-Key', $this->apiToken)
             ->addHeader('Accept', 'application/vnd.api+json')
@@ -211,7 +210,7 @@ class FastlyTls implements Provider
     private function request(string $method, string $path, ?array $body = null): array
     {
         try {
-            $response = $this->client->fetch(url: $path, method: $method, body: $body);
+            $response = $this->client->fetch(url: $this->apiBase . $path, method: $method, body: $body);
 
             return [
                 'statusCode' => $response->getStatusCode(),
@@ -234,7 +233,7 @@ class FastlyTls implements Provider
     {
         try {
             return $response->json();
-        } catch (FetchException) {
+        } catch (\Throwable) {
             return $response->text();
         }
     }

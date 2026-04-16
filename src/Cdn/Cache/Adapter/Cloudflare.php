@@ -16,7 +16,6 @@ class Cloudflare implements Adapter
     ) {
         $this->client ??= new Client();
         $this->client
-            ->setBaseUrl($this->apiBase)
             ->setUserAgent('Utopia CDN Cloudflare Adapter')
             ->addHeader('Authorization', 'Bearer ' . $this->apiToken)
             ->addHeader('Content-Type', Client::CONTENT_TYPE_APPLICATION_JSON);
@@ -73,7 +72,7 @@ class Cloudflare implements Adapter
     private function request(string $method, string $url, ?array $body = null): array
     {
         try {
-            $response = $this->client->fetch(url: $url, method: $method, body: $body);
+            $response = $this->client->fetch(url: $this->apiBase . $url, method: $method, body: $body);
 
             return [
                 'statusCode' => $response->getStatusCode(),
@@ -96,7 +95,7 @@ class Cloudflare implements Adapter
     {
         try {
             return $response->json();
-        } catch (FetchException) {
+        } catch (\Throwable) {
             return $response->text();
         }
     }
