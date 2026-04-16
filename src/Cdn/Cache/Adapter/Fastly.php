@@ -10,7 +10,6 @@ class Fastly implements Adapter
 {
     public function __construct(
         private string $apiToken,
-        private string $baseUrl,
         private bool $softPurge = false,
         private ?Client $client = null,
         private string $apiBase = 'https://api.fastly.com'
@@ -29,7 +28,7 @@ class Fastly implements Adapter
 
     public function purgePaths(array $paths): void
     {
-        $urls = $this->normalizePaths($paths);
+        $urls = \array_values(\array_filter($paths, static fn (string $path): bool => \trim($path) !== ''));
 
         if ($urls === []) {
             return;
@@ -94,28 +93,4 @@ class Fastly implements Adapter
         }
     }
 
-    /**
-     * @param array<int, string> $paths
-     * @return array<int, string>
-     */
-    private function normalizePaths(array $paths): array
-    {
-        $normalized = [];
-
-        foreach ($paths as $path) {
-            $path = \trim($path);
-            if ($path === '') {
-                continue;
-            }
-
-            if (\filter_var($path, FILTER_VALIDATE_URL) !== false) {
-                $normalized[] = $path;
-                continue;
-            }
-
-            $normalized[] = \rtrim($this->baseUrl, '/') . '/' . \ltrim($path, '/');
-        }
-
-        return \array_values(\array_unique($normalized));
-    }
 }

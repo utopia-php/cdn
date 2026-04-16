@@ -17,8 +17,8 @@ class FastlyTest extends TestCase
         ]);
         $client = (new Client($adapter))->setBaseUrl('https://api.fastly.com');
 
-        $cdn = new Fastly('token', 'https://example.com', false, $client);
-        $cdn->purgePaths(['/hello/world']);
+        $cdn = new Fastly('token', false, $client);
+        $cdn->purgePaths(['https://example.com/hello/world']);
 
         $this->assertCount(1, $adapter->calls);
         $this->assertSame('POST', $adapter->calls[0]['method']);

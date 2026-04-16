@@ -11,7 +11,6 @@ class Cloudflare implements Adapter
     public function __construct(
         private string $zoneId,
         private string $apiToken,
-        private string $baseUrl,
         private ?Client $client = null,
         private string $apiBase = 'https://api.cloudflare.com/client/v4'
     ) {
@@ -25,7 +24,7 @@ class Cloudflare implements Adapter
 
     public function purgePaths(array $paths): void
     {
-        $files = $this->normalizePaths($paths);
+        $files = \array_values(\array_filter($paths, static fn (string $path): bool => \trim($path) !== ''));
 
         if ($files === []) {
             return;
@@ -95,28 +94,4 @@ class Cloudflare implements Adapter
         }
     }
 
-    /**
-     * @param array<int, string> $paths
-     * @return array<int, string>
-     */
-    private function normalizePaths(array $paths): array
-    {
-        $normalized = [];
-
-        foreach ($paths as $path) {
-            $path = \trim($path);
-            if ($path === '') {
-                continue;
-            }
-
-            if (\filter_var($path, FILTER_VALIDATE_URL) !== false) {
-                $normalized[] = $path;
-                continue;
-            }
-
-            $normalized[] = \rtrim($this->baseUrl, '/') . '/' . \ltrim($path, '/');
-        }
-
-        return \array_values(\array_unique($normalized));
-    }
 }

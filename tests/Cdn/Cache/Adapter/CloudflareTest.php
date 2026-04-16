@@ -10,15 +10,15 @@ use Utopia\Tests\Cdn\FetchAdapter;
 
 class CloudflareTest extends TestCase
 {
-    public function testPurgePathsSendsNormalizedUrls(): void
+    public function testPurgePathsSendsUrlsAsProvided(): void
     {
         $adapter = new FetchAdapter([
             new Response(200, '{"success":true}', []),
         ]);
         $client = (new Client($adapter))->setBaseUrl('https://api.cloudflare.com/client/v4');
 
-        $cdn = new Cloudflare('zone-id', 'token', 'https://example.com', $client);
-        $cdn->purgePaths(['/a', 'https://example.com/b', '/a']);
+        $cdn = new Cloudflare('zone-id', 'token', $client);
+        $cdn->purgePaths(['https://example.com/a', 'https://example.com/b']);
 
         $this->assertCount(1, $adapter->calls);
         $this->assertSame('POST', $adapter->calls[0]['method']);
