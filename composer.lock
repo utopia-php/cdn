@@ -4,20 +4,20 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "3c41f25d27345f5daec9c1b8e66ceb31",
+    "content-hash": "34c118c60b124663712a699f3911c8ae",
     "packages": [
         {
             "name": "utopia-php/fetch",
-            "version": "1.1.0",
+            "version": "0.5.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/utopia-php/fetch.git",
-                "reference": "d5e8d8baafe6715eb1a3fb11c956d50cbaebd428"
+                "reference": "a96a010e1c273f3888765449687baf58cbc61fcd"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/utopia-php/fetch/zipball/d5e8d8baafe6715eb1a3fb11c956d50cbaebd428",
-                "reference": "d5e8d8baafe6715eb1a3fb11c956d50cbaebd428",
+                "url": "https://api.github.com/repos/utopia-php/fetch/zipball/a96a010e1c273f3888765449687baf58cbc61fcd",
+                "reference": "a96a010e1c273f3888765449687baf58cbc61fcd",
                 "shasum": ""
             },
             "require": {
@@ -26,8 +26,7 @@
             "require-dev": {
                 "laravel/pint": "^1.5.0",
                 "phpstan/phpstan": "^1.10",
-                "phpunit/phpunit": "^9.5",
-                "swoole/ide-helper": "^6.0"
+                "phpunit/phpunit": "^9.5"
             },
             "type": "library",
             "autoload": {
@@ -42,9 +41,9 @@
             "description": "A simple library that provides an interface for making HTTP Requests.",
             "support": {
                 "issues": "https://github.com/utopia-php/fetch/issues",
-                "source": "https://github.com/utopia-php/fetch/tree/1.1.0"
+                "source": "https://github.com/utopia-php/fetch/tree/0.5.1"
             },
-            "time": "2026-03-30T04:13:01+00:00"
+            "time": "2025-12-18T16:25:10+00:00"
         }
     ],
     "packages-dev": [
