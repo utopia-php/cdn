@@ -5,9 +5,11 @@ namespace Utopia\Cdn\Cache;
 interface Adapter
 {
     /**
-     * @param array<int, string> $urls
+     * @param array<int, string> $paths
      */
-    public function purgeUrls(array $urls): void;
+    public function purgePaths(string $domain, array $paths): void;
+
+    public function purgeDomain(string $domain): void;
 
     /**
      * @param array<int, string> $keys

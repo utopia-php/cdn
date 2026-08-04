@@ -55,4 +55,42 @@ class FastlyTlsTest extends TestCase
         $this->assertSame('DELETE', $client->calls[1]['method']);
         $this->assertSame('https://api.fastly.com/tls/subscriptions/sub_123', $client->calls[1]['url']);
     }
+
+    public function testIssueCertificateReturnsRenewDateFromIncludedCertificate(): void
+    {
+        $client = new TestClient([new Response(200, \json_encode([
+            'data' => [[
+                'id' => 'sub_123',
+                'attributes' => ['state' => 'issued'],
+                'relationships' => ['tls_certificates' => ['data' => [['type' => 'tls_certificate', 'id' => 'cert_1']]]],
+            ]],
+            'included' => [[
+                'type' => 'tls_certificate',
+                'id' => 'cert_1',
+                'attributes' => ['not_after' => '2027-02-01T00:00:00Z'],
+            ]],
+        ]), [])]);
+
+        $provider = new FastlyTls('token', 'tls-config-id', 'certainly', $client);
+        $this->assertSame('2027-01-02 00:00:00.000', $provider->issueCertificate('cert', 'example.com', null));
+    }
+
+    public function testRetriesFailedSubscription(): void
+    {
+        $client = new TestClient([
+            new Response(200, '{"data":[{"id":"sub_123","attributes":{"state":"failed"}}]}', []),
+            new Response(200, '{"data":{"id":"sub_123","attributes":{"state":"processing"}}}', []),
+        ]);
+        $provider = new FastlyTls('token', 'config', 'certainly', $client);
+        $this->assertNull($provider->issueCertificate('cert', 'example.com', null));
+        $this->assertSame('PATCH', $client->calls[1]['method']);
+    }
+
+    public function testRejectsMalformedSuccessfulResponse(): void
+    {
+        $provider = new FastlyTls('token', 'config', 'certainly', new TestClient([new Response(200, 'not-json', [])]));
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('valid JSON');
+        $provider->getCertificateStatus('example.com', null);
+    }
 }

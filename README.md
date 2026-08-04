@@ -17,12 +17,13 @@ composer require utopia-php/cdn
 
 ## Cache Purging
 
-The cache API supports two purge modes:
+The cache API supports three purge modes:
 
-- URL purges for providers like Cloudflare and Fastly
+- path purges scoped to a domain
+- domain-wide purges
 - key purges for providers like Fastly
 
-URL purges expect fully qualified URLs.
+Domains are lowercase hostnames without a scheme or trailing slash. Paths begin with `/`; CDN resources are assumed to use HTTPS.
 
 ### Cloudflare
 
@@ -37,10 +38,12 @@ $cache = new Cache(new Cloudflare(
     apiToken: 'YOUR_API_TOKEN'
 ));
 
-$cache->purgeUrls([
-    'https://example.com/files/hero.png',
-    'https://example.com/files/logo.svg',
+$cache->purgePaths('example.com', [
+    '/files/hero.png',
+    '/files/logo.svg',
 ]);
+
+$cache->purgeDomain('example.com');
 ```
 
 ### Fastly
@@ -57,15 +60,33 @@ $cache = new Cache(new Fastly(
     softPurge: false
 ));
 
-$cache->purgeUrls([
-    'https://example.com/files/hero.png',
-    'https://example.com/files/logo.svg',
+$cache->purgePaths('example.com', [
+    '/files/hero.png',
+    '/files/logo.svg',
 ]);
 
 $cache->purgeKeys([
     'host-deadbeef',
     'deployment-12345',
 ]);
+```
+
+Fastly domain purges invalidate the entire configured service. Use one domain per Fastly service when calling `purgeDomain()`. Cloudflare hostname purging depends on the cache-purge features enabled for your plan.
+
+### Cache routing
+
+`Cache\Adapter\Proxy` routes the application domain to one adapter, configured network domains to another, and fans custom domains out to every custom adapter.
+
+```php
+use Utopia\Cdn\Cache\Adapter\Proxy;
+
+$cache = new Cache(new Proxy(
+    appDomain: 'app.example.com',
+    appDomainAdapter: $cloudflareCache,
+    networkAdapter: $fastlyCache,
+    customDomainAdapters: [$cloudflareCache, $fastlyCache],
+    networkDomains: ['network.example.com'],
+));
 ```
 
 ## Certificates
@@ -95,6 +116,36 @@ $renewRequired = $certificates->isRenewRequired('cdn.example.com', null);
 
 `issueCertificate()` returns a renew date when Fastly already has an issued or renewing certificate. For asynchronous states like `pending` or `processing`, it returns `null`.
 
+### Cloudflare certificates
+
+Cloudflare certificates use Cloudflare for SaaS custom hostnames, which must be enabled for the zone and plan.
+
+```php
+use Utopia\Cdn\Certificates\Provider\Cloudflare;
+
+$cloudflareCertificates = new Cloudflare(
+    zoneId: 'YOUR_ZONE_ID',
+    apiToken: 'YOUR_API_TOKEN',
+);
+```
+
+Cloudflare custom-hostname issuance is treated as instant. Certificate status retrieval is not supported by this provider.
+
+### Certificate routing
+
+`Certificates\Provider\Proxy` sends `site`, `network`, and `redirect` domains to the network provider, the application domain to its provider, and all other domains to every custom-domain provider.
+
+```php
+use Utopia\Cdn\Certificates\Provider\Proxy;
+
+$certificates = new Certificates(new Proxy(
+    appDomain: 'app.example.com',
+    appDomainProvider: $appDomainCertificates,
+    networkProvider: $fastlyCertificates,
+    customDomainProviders: [$cloudflareCertificates, $fastlyCertificates],
+));
+```
+
 ## Supported Providers
 
 ### Cache
@@ -105,7 +156,7 @@ $renewRequired = $certificates->isRenewRequired('cdn.example.com', null);
 ### Certificates
 
 - [x] [Fastly TLS subscriptions](https://www.fastly.com/documentation/guides/getting-started/domains/securing-domains-with-tls/)
-- [ ] Cloudflare
+- [x] [Cloudflare for SaaS custom hostnames](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/domain-support/create-custom-hostnames/)
 
 ## System Requirements
 

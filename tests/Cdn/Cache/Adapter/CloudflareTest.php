@@ -9,35 +9,29 @@ use Utopia\Tests\Cdn\TestClient;
 
 class CloudflareTest extends TestCase
 {
-    public function testPurgeUrlsSendsUrlsAsProvided(): void
+    public function testPurgesPathsAndDomain(): void
     {
-        $client = new TestClient([
-            new Response(200, '{"success":true}', []),
-        ]);
-
+        $client = new TestClient([new Response(200, '{"success":true}', []), new Response(200, '{"success":true}', [])]);
         $cdn = new Cloudflare('zone-id', 'token', $client);
-        $cdn->purgeUrls(['https://example.com/a', 'https://example.com/b']);
 
-        $this->assertCount(1, $client->calls);
-        $this->assertSame('POST', $client->calls[0]['method']);
-        $this->assertSame('https://api.cloudflare.com/client/v4/zones/zone-id/purge_cache', $client->calls[0]['url']);
-        $this->assertSame([
-            'files' => [
-                'https://example.com/a',
-                'https://example.com/b',
-            ],
-        ], $client->calls[0]['body']);
+        $cdn->purgePaths('example.com', ['/a', '/b?x=1']);
+        $cdn->purgeDomain('example.com');
+
+        $this->assertSame(['files' => ['https://example.com/a', 'https://example.com/b?x=1']], $client->calls[0]['body']);
+        $this->assertSame(['hosts' => ['example.com']], $client->calls[1]['body']);
     }
 
-    public function testPurgeKeysThrowsUnsupportedException(): void
+    public function testBatchesPaths(): void
     {
-        $client = new TestClient([]);
+        $client = new TestClient([new Response(200, '{"success":true}', []), new Response(200, '{"success":true}', [])]);
+        $cdn = new Cloudflare('zone', 'token', $client);
+        $cdn->purgePaths('example.com', \array_fill(0, 31, '/a'));
+        $this->assertCount(2, $client->calls);
+    }
 
-        $cdn = new Cloudflare('zone-id', 'token', $client);
-
+    public function testPurgeKeysIsUnsupported(): void
+    {
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Cloudflare cache key purging is not supported by this adapter.');
-
-        $cdn->purgeKeys(['host-deadbeef']);
+        (new Cloudflare('zone', 'token', new TestClient([])))->purgeKeys(['key']);
     }
 }

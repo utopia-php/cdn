@@ -12,11 +12,21 @@ class TestClient extends Client
      */
     public array $calls = [];
 
+    /** @var array<string, string> */
+    public array $headers = [];
+
     /**
      * @param array<int, Response> $responses
      */
     public function __construct(private array $responses)
     {
+    }
+
+    public function addHeader(string $key, string $value): Client
+    {
+        $this->headers[\strtolower($key)] = $value;
+
+        return $this;
     }
 
     public function fetch(

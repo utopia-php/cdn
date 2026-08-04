@@ -11,11 +11,16 @@ class Cache
     }
 
     /**
-     * @param array<int, string> $urls
+     * @param array<int, string> $paths
      */
-    public function purgeUrls(array $urls): void
+    public function purgePaths(string $domain, array $paths): void
     {
-        $this->adapter->purgeUrls($urls);
+        $this->adapter->purgePaths(Domain::validate($domain), Domain::validatePaths($paths));
+    }
+
+    public function purgeDomain(string $domain): void
+    {
+        $this->adapter->purgeDomain(Domain::validate($domain));
     }
 
     /**

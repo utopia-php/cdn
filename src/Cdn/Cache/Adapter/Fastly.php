@@ -3,6 +3,7 @@
 namespace Utopia\Cdn\Cache\Adapter;
 
 use Utopia\Cdn\Cache\Adapter;
+use Utopia\Cdn\Domain;
 use Utopia\Fetch\Client;
 use Utopia\Fetch\Exception as FetchException;
 
@@ -26,18 +27,37 @@ class Fastly implements Adapter
         }
     }
 
-    public function purgeUrls(array $urls): void
+    public function purgePaths(string $domain, array $paths): void
     {
-        if ($urls === []) {
+        $domain = Domain::validate($domain);
+        $paths = Domain::validatePaths($paths);
+
+        if ($paths === []) {
             return;
         }
 
-        foreach ($urls as $url) {
-            $result = $this->request(Client::METHOD_POST, '/purge/' . $url);
+        foreach ($paths as $path) {
+            $cachedUrl = $domain . $this->encodePath($path);
+            $result = $this->request(Client::METHOD_POST, '/purge/' . $cachedUrl);
 
             if ($result['statusCode'] < 200 || $result['statusCode'] >= 300) {
                 throw new \RuntimeException($this->formatError($result));
             }
+        }
+    }
+
+    /**
+     * Purges the entire configured service. The service is expected to be dedicated to the supplied domain.
+     */
+    public function purgeDomain(string $domain): void
+    {
+        Domain::validate($domain);
+        $this->requireServiceId('domain purging');
+
+        $result = $this->request(Client::METHOD_POST, '/service/' . $this->serviceId . '/purge_all');
+
+        if ($result['statusCode'] < 200 || $result['statusCode'] >= 300) {
+            throw new \RuntimeException($this->formatError($result));
         }
     }
 
@@ -47,9 +67,7 @@ class Fastly implements Adapter
             return;
         }
 
-        if ($this->serviceId === null || $this->serviceId === '') {
-            throw new \RuntimeException('Fastly service ID is required for cache key purging.');
-        }
+        $this->requireServiceId('cache key purging');
 
         foreach ($keys as $key) {
             $result = $this->request(Client::METHOD_POST, '/service/' . $this->serviceId . '/purge/' . $key);
@@ -58,6 +76,22 @@ class Fastly implements Adapter
                 throw new \RuntimeException($this->formatError($result));
             }
         }
+    }
+
+    private function requireServiceId(string $operation): void
+    {
+        if ($this->serviceId === null || $this->serviceId === '') {
+            throw new \RuntimeException('Fastly service ID is required for ' . $operation . '.');
+        }
+    }
+
+    private function encodePath(string $path): string
+    {
+        return (string) \preg_replace_callback(
+            '/[^A-Za-z0-9\-._~\/%?=&:+]/u',
+            static fn (array $match): string => \rawurlencode($match[0]),
+            $path,
+        );
     }
 
     /**

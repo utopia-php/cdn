@@ -3,6 +3,7 @@
 namespace Utopia\Cdn\Cache\Adapter;
 
 use Utopia\Cdn\Cache\Adapter;
+use Utopia\Cdn\Domain;
 use Utopia\Fetch\Client;
 use Utopia\Fetch\Exception as FetchException;
 
@@ -21,23 +22,51 @@ class Cloudflare implements Adapter
             ->addHeader('Content-Type', Client::CONTENT_TYPE_APPLICATION_JSON);
     }
 
-    public function purgeUrls(array $urls): void
+    public function purgePaths(string $domain, array $paths): void
     {
-        if ($urls === []) {
+        $domain = Domain::validate($domain);
+        $paths = Domain::validatePaths($paths);
+
+        if ($paths === []) {
             return;
         }
 
-        foreach (\array_chunk($urls, 30) as $chunk) {
+        foreach (\array_chunk($paths, 30) as $chunk) {
+            $urls = \array_map(fn (string $path): string => 'https://' . $domain . $path, $chunk);
             $result = $this->request(
                 method: Client::METHOD_POST,
                 url: '/zones/' . $this->zoneId . '/purge_cache',
-                body: ['files' => $chunk],
+                body: ['files' => $urls],
             );
 
-            if (($result['statusCode'] < 200 || $result['statusCode'] >= 300) || (($result['response']['success'] ?? false) !== true)) {
+            if (!$this->isSuccess($result)) {
                 throw new \RuntimeException($this->formatError('Cloudflare', $result));
             }
         }
+    }
+
+    public function purgeDomain(string $domain): void
+    {
+        $result = $this->request(
+            method: Client::METHOD_POST,
+            url: '/zones/' . $this->zoneId . '/purge_cache',
+            body: ['hosts' => [Domain::validate($domain)]],
+        );
+
+        if (!$this->isSuccess($result)) {
+            throw new \RuntimeException($this->formatError('Cloudflare', $result));
+        }
+    }
+
+    /**
+     * @param array{statusCode:int,response:array<string, mixed>|string|null,error:string|null} $result
+     */
+    private function isSuccess(array $result): bool
+    {
+        return $result['statusCode'] >= 200
+            && $result['statusCode'] < 300
+            && \is_array($result['response'])
+            && ($result['response']['success'] ?? false) === true;
     }
 
     public function purgeKeys(array $keys): void

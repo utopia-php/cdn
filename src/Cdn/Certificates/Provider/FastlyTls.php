@@ -30,8 +30,8 @@ class FastlyTls implements Provider
 
         if ($subscription === null) {
             $subscription = $this->createSubscription($domain);
-        } elseif ($this->mapStatus($subscription['attributes']['state'] ?? '') === Status::FAILED) {
-            $subscription = $this->retrySubscription($subscription['id']);
+        } elseif ($this->mapStatus($subscription['resource']['attributes']['state'] ?? '') === Status::FAILED) {
+            $subscription = $this->retrySubscription($subscription['resource']['id']);
         }
 
         return $this->extractRenewDate($subscription);
@@ -50,7 +50,7 @@ class FastlyTls implements Provider
             return Status::UNKNOWN;
         }
 
-        return $this->mapStatus($subscription['attributes']['state'] ?? '');
+        return $this->mapStatus($subscription['resource']['attributes']['state'] ?? '');
     }
 
     public function isRenewRequired(string $domain, ?string $domainType): bool
@@ -61,7 +61,7 @@ class FastlyTls implements Provider
             return true;
         }
 
-        return $this->mapStatus($subscription['attributes']['state'] ?? '') === Status::FAILED;
+        return $this->mapStatus($subscription['resource']['attributes']['state'] ?? '') === Status::FAILED;
     }
 
     public function deleteCertificate(string $domain): void
@@ -74,7 +74,7 @@ class FastlyTls implements Provider
 
         $result = $this->request(
             'DELETE',
-            '/tls/subscriptions/' . $subscription['id']
+            '/tls/subscriptions/' . $subscription['resource']['id']
         );
 
         if ($result['statusCode'] < 200 || $result['statusCode'] >= 300) {
@@ -83,7 +83,7 @@ class FastlyTls implements Provider
     }
 
     /**
-     * @return array<string, mixed>|null
+     * @return array{resource:array<string, mixed>,included:array<int, array<string, mixed>>}|null
      */
     private function findSubscription(string $domain): ?array
     {
@@ -99,13 +99,34 @@ class FastlyTls implements Provider
             throw new \RuntimeException($this->formatError('Failed to fetch Fastly TLS subscriptions', $result));
         }
 
-        $data = $result['response']['data'][0] ?? null;
+        if (!\is_array($result['response'])) {
+            throw new \RuntimeException('Fastly TLS subscriptions response was not valid JSON.');
+        }
 
-        return \is_array($data) ? $data : null;
+        $data = $result['response']['data'] ?? null;
+        if (!\is_array($data)) {
+            throw new \RuntimeException('Fastly TLS subscriptions response was missing its data list.');
+        }
+
+        $resource = $data[0] ?? null;
+        if ($resource === null) {
+            return null;
+        }
+
+        if (!\is_array($resource)) {
+            throw new \RuntimeException('Fastly TLS subscription resource was malformed.');
+        }
+
+        $included = $result['response']['included'] ?? [];
+        if (!\is_array($included)) {
+            throw new \RuntimeException('Fastly TLS subscriptions response contained malformed included resources.');
+        }
+
+        return ['resource' => $resource, 'included' => \array_values(\array_filter($included, 'is_array'))];
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{resource:array<string, mixed>,included:array<int, array<string, mixed>>}
      */
     private function createSubscription(string $domain): array
     {
@@ -142,17 +163,23 @@ class FastlyTls implements Provider
             throw new \RuntimeException($this->formatError('Failed to create Fastly TLS subscription', $result));
         }
 
+        if (!\is_array($result['response'])) {
+            throw new \RuntimeException('Fastly TLS subscription response was not valid JSON.');
+        }
+
         $data = $result['response']['data'] ?? null;
 
         if (!\is_array($data)) {
             throw new \RuntimeException('Fastly TLS subscription response was missing data.');
         }
 
-        return $data;
+        $included = $result['response']['included'] ?? [];
+
+        return ['resource' => $data, 'included' => \is_array($included) ? \array_values(\array_filter($included, 'is_array')) : []];
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{resource:array<string, mixed>,included:array<int, array<string, mixed>>}
      */
     private function retrySubscription(string $subscriptionId): array
     {
@@ -170,35 +197,61 @@ class FastlyTls implements Provider
             throw new \RuntimeException($this->formatError('Failed to retry Fastly TLS subscription', $result));
         }
 
+        if (!\is_array($result['response'])) {
+            throw new \RuntimeException('Fastly TLS retry response was not valid JSON.');
+        }
+
         $data = $result['response']['data'] ?? null;
 
         if (!\is_array($data)) {
             throw new \RuntimeException('Fastly TLS retry response was missing data.');
         }
 
-        return $data;
+        $included = $result['response']['included'] ?? [];
+
+        return ['resource' => $data, 'included' => \is_array($included) ? \array_values(\array_filter($included, 'is_array')) : []];
     }
 
     /**
-     * @param array<string, mixed> $subscription
+     * @param array{resource:array<string, mixed>,included:array<int, array<string, mixed>>} $subscription
      */
     private function extractRenewDate(array $subscription): ?string
     {
-        $state = $this->mapStatus($subscription['attributes']['state'] ?? '');
+        $resource = $subscription['resource'];
+        $state = $this->mapStatus($resource['attributes']['state'] ?? '');
 
         if ($state !== Status::ISSUED && $state !== Status::RENEWING) {
             return null;
         }
 
-        $certificate = $subscription['included']['tls_certificates'][0]['attributes']['not_after']
-            ?? $subscription['relationships']['tls_certificates']['data'][0]['attributes']['not_after']
-            ?? null;
+        $relationship = $resource['relationships']['tls_certificates']['data'] ?? [];
+        $certificateIds = [];
+        if (\is_array($relationship)) {
+            foreach ($relationship as $reference) {
+                if (\is_array($reference) && \is_string($reference['id'] ?? null)) {
+                    $certificateIds[] = $reference['id'];
+                }
+            }
+        }
 
-        if (!\is_string($certificate) || $certificate === '') {
+        $dates = [];
+        foreach ($subscription['included'] as $included) {
+            if (($included['type'] ?? null) !== 'tls_certificate' || !\in_array($included['id'] ?? null, $certificateIds, true)) {
+                continue;
+            }
+
+            $notAfter = $included['attributes']['not_after'] ?? null;
+            if (\is_string($notAfter) && $notAfter !== '') {
+                $dates[] = $notAfter;
+            }
+        }
+
+        if ($dates === []) {
             return null;
         }
 
-        $date = new \DateTimeImmutable($certificate);
+        \usort($dates, static fn (string $left, string $right): int => \strtotime($right) <=> \strtotime($left));
+        $date = new \DateTimeImmutable($dates[0]);
 
         return $date->modify('-30 days')->format('Y-m-d H:i:s.v');
     }

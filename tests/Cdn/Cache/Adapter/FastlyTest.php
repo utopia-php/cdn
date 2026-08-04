@@ -9,33 +9,25 @@ use Utopia\Tests\Cdn\TestClient;
 
 class FastlyTest extends TestCase
 {
-    public function testPurgeUrlsBuildsFastlyPurgeUrl(): void
+    public function testPurgesPathsDomainAndKeys(): void
     {
-        $client = new TestClient([
-            new Response(200, '{"status":"ok"}', []),
-        ]);
+        $client = new TestClient(\array_fill(0, 3, new Response(200, '{"status":"ok"}', [])));
+        $cdn = new Fastly('token', 'service-id', true, $client);
 
-        $cdn = new Fastly('token', null, false, $client);
-        $cdn->purgeUrls(['https://example.com/hello/world']);
+        $cdn->purgePaths('example.com', ['/hello world?x=1']);
+        $cdn->purgeDomain('example.com');
+        $cdn->purgeKeys(['key']);
 
-        $this->assertCount(1, $client->calls);
-        $this->assertSame('POST', $client->calls[0]['method']);
-        $this->assertSame('https://api.fastly.com/purge/https://example.com/hello/world', $client->calls[0]['url']);
-        $this->assertSame([], $client->calls[0]['body']);
+        $this->assertSame('https://api.fastly.com/purge/example.com/hello%20world?x=1', $client->calls[0]['url']);
+        $this->assertSame('https://api.fastly.com/service/service-id/purge_all', $client->calls[1]['url']);
+        $this->assertSame('https://api.fastly.com/service/service-id/purge/key', $client->calls[2]['url']);
+        $this->assertSame('1', $client->headers['fastly-soft-purge'] ?? null);
     }
 
-    public function testPurgeKeysBuildsFastlyServicePurgeUrl(): void
+    public function testDomainPurgeRequiresServiceId(): void
     {
-        $client = new TestClient([
-            new Response(200, '{"status":"ok"}', []),
-        ]);
-
-        $cdn = new Fastly('token', 'service-id', false, $client);
-        $cdn->purgeKeys(['host-deadbeef']);
-
-        $this->assertCount(1, $client->calls);
-        $this->assertSame('POST', $client->calls[0]['method']);
-        $this->assertSame('https://api.fastly.com/service/service-id/purge/host-deadbeef', $client->calls[0]['url']);
-        $this->assertSame([], $client->calls[0]['body']);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('service ID');
+        (new Fastly('token', null, false, new TestClient([])))->purgeDomain('example.com');
     }
 }

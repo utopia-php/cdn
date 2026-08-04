@@ -34,7 +34,7 @@
         "utopia-php/fetch": "^0"
     },
     "require-dev": {
-        "phpunit/phpunit": "11.*",
+        "phpunit/phpunit": "^10.5",
         "laravel/pint": "1.*",
         "phpstan/phpstan": "2.*"
     },

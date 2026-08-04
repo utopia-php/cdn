@@ -8,59 +8,50 @@ use Utopia\Cdn\Cache\Adapter;
 
 class CacheTest extends TestCase
 {
-    public function testPurgeUrlsDelegatesToAdapter(): void
+    public function testDelegatesCacheOperations(): void
     {
         $calls = new \ArrayObject();
+        $cache = new Cache($this->adapter($calls));
 
-        $cache = new Cache(new class ($calls) implements Adapter {
-            /**
-             * @param \ArrayObject<int, array<string, array<int, string>>> $calls
-             */
-            public function __construct(private \ArrayObject $calls)
-            {
-            }
+        $cache->purgePaths('example.com', ['/file.png']);
+        $cache->purgeDomain('example.com');
+        $cache->purgeKeys(['key']);
 
-            public function purgeUrls(array $urls): void
-            {
-                $this->calls->append(['urls' => $urls]);
-            }
-
-            public function purgeKeys(array $keys): void
-            {
-                $this->calls->append(['keys' => $keys]);
-            }
-        });
-
-        $cache->purgeUrls(['https://example.com/file.png']);
-
-        $this->assertSame([['urls' => ['https://example.com/file.png']]], $calls->getArrayCopy());
+        $this->assertSame([
+            ['paths' => ['example.com', ['/file.png']]],
+            ['domain' => 'example.com'],
+            ['keys' => ['key']],
+        ], $calls->getArrayCopy());
     }
 
-    public function testPurgeKeysDelegatesToAdapter(): void
+    public function testRejectsInvalidInput(): void
     {
-        $calls = new \ArrayObject();
+        $cache = new Cache($this->adapter(new \ArrayObject()));
 
-        $cache = new Cache(new class ($calls) implements Adapter {
-            /**
-             * @param \ArrayObject<int, array<string, array<int, string>>> $calls
-             */
+        $this->expectException(\InvalidArgumentException::class);
+        $cache->purgePaths('https://example.com', ['relative']);
+    }
+
+    /** @param \ArrayObject<int, mixed> $calls */
+    private function adapter(\ArrayObject $calls): Adapter
+    {
+        return new class ($calls) implements Adapter {
+            /** @param \ArrayObject<int, mixed> $calls */
             public function __construct(private \ArrayObject $calls)
             {
             }
-
-            public function purgeUrls(array $urls): void
+            public function purgePaths(string $domain, array $paths): void
             {
-                $this->calls->append(['urls' => $urls]);
+                $this->calls->append(['paths' => [$domain, $paths]]);
             }
-
+            public function purgeDomain(string $domain): void
+            {
+                $this->calls->append(['domain' => $domain]);
+            }
             public function purgeKeys(array $keys): void
             {
                 $this->calls->append(['keys' => $keys]);
             }
-        });
-
-        $cache->purgeKeys(['host-deadbeef']);
-
-        $this->assertSame([['keys' => ['host-deadbeef']]], $calls->getArrayCopy());
+        };
     }
 }
