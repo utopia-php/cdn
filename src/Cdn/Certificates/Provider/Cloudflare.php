@@ -61,7 +61,7 @@ class Cloudflare implements Provider
         return $this->findHostname(Domain::validate($domain)) === null;
     }
 
-    public function deleteCertificate(string $domain): void
+    public function deleteCertificate(string $domain, ?string $domainType = null): void
     {
         $hostname = $this->findHostname(Domain::validate($domain));
         if ($hostname === null) {

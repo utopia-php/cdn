@@ -24,7 +24,9 @@ class ProxyTest extends TestCase
         $this->assertSame(Status::ISSUED, $proxy->getCertificateStatus('custom.example.com', null));
         $this->assertTrue($proxy->isRenewRequired('site.example.com', 'site'));
         $proxy->deleteCertificate('app.example.com');
+        $proxy->deleteCertificate('site.example.com', 'site');
         $this->assertContains('app:delete', $calls->getArrayCopy());
+        $this->assertContains('network:delete', $calls->getArrayCopy());
     }
 
     public function testRejectsMissingCustomProviders(): void
@@ -60,7 +62,7 @@ class ProxyTest extends TestCase
             {
                 return $this->renew;
             }
-            public function deleteCertificate(string $domain): void
+            public function deleteCertificate(string $domain, ?string $domainType = null): void
             {
                 $this->calls->append($this->name . ':delete');
             }

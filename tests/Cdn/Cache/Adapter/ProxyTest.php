@@ -6,6 +6,7 @@ use PHPUnit\Framework\TestCase;
 use Utopia\Cdn\Cache\Adapter;
 use Utopia\Cdn\Cache\Adapter\Proxy;
 use Utopia\Cdn\Exception\Configuration;
+use Utopia\Cdn\Exception\UnsupportedOperation;
 
 class ProxyTest extends TestCase
 {
@@ -34,12 +35,33 @@ class ProxyTest extends TestCase
         $proxy->purgeDomain('custom.example.com');
     }
 
-    /** @param \ArrayObject<int, mixed> $calls */
-    private function adapter(string $name, \ArrayObject $calls): Adapter
+    public function testKeyPurgeSkipsUnsupportedAdapters(): void
     {
-        return new class ($name, $calls) implements Adapter {
+        $calls = new \ArrayObject();
+        $unsupported = $this->adapter('cloudflare', $calls, false);
+        $fastly = $this->adapter('fastly', $calls);
+        $proxy = new Proxy('app.example.com', $unsupported, $fastly, [$unsupported, $fastly]);
+
+        $proxy->purgeKeys(['key']);
+
+        $this->assertSame(['fastly:keys'], $calls->getArrayCopy());
+    }
+
+    public function testKeyPurgeFailsWhenEveryAdapterIsUnsupported(): void
+    {
+        $unsupported = $this->adapter('cloudflare', new \ArrayObject(), false);
+        $proxy = new Proxy('app.example.com', $unsupported, $unsupported, [$unsupported]);
+
+        $this->expectException(UnsupportedOperation::class);
+        $proxy->purgeKeys(['key']);
+    }
+
+    /** @param \ArrayObject<int, mixed> $calls */
+    private function adapter(string $name, \ArrayObject $calls, bool $supportsKeys = true): Adapter
+    {
+        return new class ($name, $calls, $supportsKeys) implements Adapter {
             /** @param \ArrayObject<int, mixed> $calls */
-            public function __construct(private string $name, private \ArrayObject $calls)
+            public function __construct(private string $name, private \ArrayObject $calls, private bool $supportsKeys)
             {
             }
             public function purgePaths(string $domain, array $paths): void
@@ -52,6 +74,9 @@ class ProxyTest extends TestCase
             }
             public function purgeKeys(array $keys): void
             {
+                if (!$this->supportsKeys) {
+                    throw new UnsupportedOperation('Unsupported.');
+                }
                 $this->calls->append($this->name . ':keys');
             }
         };

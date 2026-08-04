@@ -30,8 +30,8 @@ class Certificates
         return $this->provider->isRenewRequired($domain, $domainType);
     }
 
-    public function deleteCertificate(string $domain): void
+    public function deleteCertificate(string $domain, ?string $domainType = null): void
     {
-        $this->provider->deleteCertificate($domain);
+        $this->provider->deleteCertificate($domain, $domainType);
     }
 }

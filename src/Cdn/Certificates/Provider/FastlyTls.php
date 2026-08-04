@@ -64,7 +64,7 @@ class FastlyTls implements Provider
         return $this->mapStatus($subscription['resource']['attributes']['state'] ?? '') === Status::FAILED;
     }
 
-    public function deleteCertificate(string $domain): void
+    public function deleteCertificate(string $domain, ?string $domainType = null): void
     {
         $subscription = $this->findSubscription($domain);
 

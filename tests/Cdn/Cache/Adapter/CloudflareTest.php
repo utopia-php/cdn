@@ -4,6 +4,7 @@ namespace Utopia\Tests\Cdn\Cache\Adapter;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Cdn\Cache\Adapter\Cloudflare;
+use Utopia\Cdn\Exception\UnsupportedOperation;
 use Utopia\Fetch\Response;
 use Utopia\Tests\Cdn\TestClient;
 
@@ -31,7 +32,7 @@ class CloudflareTest extends TestCase
 
     public function testPurgeKeysIsUnsupported(): void
     {
-        $this->expectException(\RuntimeException::class);
+        $this->expectException(UnsupportedOperation::class);
         (new Cloudflare('zone', 'token', new TestClient([])))->purgeKeys(['key']);
     }
 }

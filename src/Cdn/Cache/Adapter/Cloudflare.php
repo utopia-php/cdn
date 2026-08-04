@@ -4,6 +4,7 @@ namespace Utopia\Cdn\Cache\Adapter;
 
 use Utopia\Cdn\Cache\Adapter;
 use Utopia\Cdn\Domain;
+use Utopia\Cdn\Exception\UnsupportedOperation;
 use Utopia\Fetch\Client;
 use Utopia\Fetch\Exception as FetchException;
 
@@ -75,7 +76,7 @@ class Cloudflare implements Adapter
             return;
         }
 
-        throw new \RuntimeException('Cloudflare cache key purging is not supported by this adapter.');
+        throw new UnsupportedOperation('Cloudflare cache key purging is not supported by this adapter.');
     }
 
     /**

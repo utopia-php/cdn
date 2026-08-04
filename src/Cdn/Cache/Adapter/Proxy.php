@@ -5,6 +5,7 @@ namespace Utopia\Cdn\Cache\Adapter;
 use Utopia\Cdn\Cache\Adapter;
 use Utopia\Cdn\Domain;
 use Utopia\Cdn\Exception\Configuration;
+use Utopia\Cdn\Exception\UnsupportedOperation;
 
 class Proxy implements Adapter
 {
@@ -48,8 +49,22 @@ class Proxy implements Adapter
 
     public function purgeKeys(array $keys): void
     {
+        if ($keys === []) {
+            return;
+        }
+
+        $purged = false;
         foreach ($this->all() as $adapter) {
-            $adapter->purgeKeys($keys);
+            try {
+                $adapter->purgeKeys($keys);
+                $purged = true;
+            } catch (UnsupportedOperation) {
+                continue;
+            }
+        }
+
+        if (!$purged) {
+            throw new UnsupportedOperation('Cache key purging is not supported by any configured adapter.');
         }
     }
 

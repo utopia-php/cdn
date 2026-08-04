@@ -12,5 +12,5 @@ interface Provider
 
     public function isRenewRequired(string $domain, ?string $domainType): bool;
 
-    public function deleteCertificate(string $domain): void;
+    public function deleteCertificate(string $domain, ?string $domainType = null): void;
 }

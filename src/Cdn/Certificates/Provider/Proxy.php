@@ -69,10 +69,10 @@ class Proxy implements Provider
         return false;
     }
 
-    public function deleteCertificate(string $domain): void
+    public function deleteCertificate(string $domain, ?string $domainType = null): void
     {
-        foreach ($this->select($domain, null) as $provider) {
-            $provider->deleteCertificate($domain);
+        foreach ($this->select($domain, $domainType) as $provider) {
+            $provider->deleteCertificate($domain, $domainType);
         }
     }
 

@@ -36,7 +36,7 @@ class CertificatesTest extends TestCase
                 return false;
             }
 
-            public function deleteCertificate(string $domain): void
+            public function deleteCertificate(string $domain, ?string $domainType = null): void
             {
             }
         });
