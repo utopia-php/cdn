@@ -4,7 +4,6 @@ namespace Utopia\Tests\Cdn\Cache\Adapter;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Cdn\Cache\Adapter\Cloudflare;
-use Utopia\Cdn\Exception\UnsupportedOperation;
 use Utopia\Psr7\Response;
 use Utopia\Psr7\Stream;
 use Utopia\Tests\Cdn\TestClient;
@@ -31,9 +30,21 @@ class CloudflareTest extends TestCase
         $this->assertCount(2, $client->calls);
     }
 
-    public function testPurgeKeysIsUnsupported(): void
+    public function testPurgesCacheTags(): void
     {
-        $this->expectException(UnsupportedOperation::class);
-        (new Cloudflare('zone', 'token', new TestClient([])))->purgeKeys(['key']);
+        $client = new TestClient([new Response(200, body: new Stream('{"success":true}'))]);
+
+        (new Cloudflare('zone', 'token', $client))->purgeKeys(['tag-a', 'tag-b']);
+
+        $this->assertSame(['tags' => ['tag-a', 'tag-b']], $client->calls[0]['body']);
+    }
+
+    public function testBatchesCacheTags(): void
+    {
+        $client = new TestClient([new Response(200, body: new Stream('{"success":true}')), new Response(200, body: new Stream('{"success":true}'))]);
+
+        (new Cloudflare('zone', 'token', $client))->purgeKeys(\array_fill(0, 31, 'tag'));
+
+        $this->assertCount(2, $client->calls);
     }
 }
