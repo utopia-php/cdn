@@ -2,26 +2,29 @@
 
 namespace Utopia\Cdn\Certificates\Provider;
 
+use Psr\Http\Client\ClientInterface;
 use Utopia\Cdn\Certificates\Provider;
 use Utopia\Cdn\Certificates\Status;
-use Utopia\Fetch\Client;
-use Utopia\Fetch\Exception as FetchException;
+use Utopia\Cdn\HttpClient;
+use Utopia\Psr7\Header;
 
 class FastlyTls implements Provider
 {
+    private HttpClient $client;
+
     public function __construct(
         private string $apiToken,
         private string $tlsConfigurationId,
         private string $certificateAuthority = 'certainly',
-        private ?Client $client = null,
+        ?ClientInterface $client = null,
         private string $apiBase = 'https://api.fastly.com'
     ) {
-        $this->client ??= new Client();
-        $this->client
-            ->setUserAgent('Utopia CDN Fastly TLS Provider')
-            ->addHeader('Fastly-Key', $this->apiToken)
-            ->addHeader('Accept', 'application/vnd.api+json')
-            ->addHeader('Content-Type', 'application/vnd.api+json');
+        $this->client = new HttpClient($client, [
+            Header::USER_AGENT => 'Utopia CDN Fastly TLS Provider',
+            'Fastly-Key' => $this->apiToken,
+            Header::ACCEPT => 'application/vnd.api+json',
+            Header::CONTENT_TYPE => 'application/vnd.api+json',
+        ]);
     }
 
     public function issueCertificate(string $certName, string $domain, ?string $domainType): ?string
@@ -262,33 +265,7 @@ class FastlyTls implements Provider
      */
     private function request(string $method, string $path, ?array $body = null): array
     {
-        try {
-            $response = $this->client->fetch(url: $this->apiBase . $path, method: $method, body: $body);
-
-            return [
-                'statusCode' => $response->getStatusCode(),
-                'response' => $this->decodeResponse($response),
-                'error' => null,
-            ];
-        } catch (FetchException $error) {
-            return [
-                'statusCode' => 0,
-                'response' => null,
-                'error' => $error->getMessage(),
-            ];
-        }
-    }
-
-    /**
-     * @return array<string, mixed>|string|null
-     */
-    private function decodeResponse(\Utopia\Fetch\Response $response): array|string|null
-    {
-        try {
-            return $response->json();
-        } catch (\Throwable) {
-            return $response->text();
-        }
+        return $this->client->request($method, $this->apiBase . $path, $body);
     }
 
     /**

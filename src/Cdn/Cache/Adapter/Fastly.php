@@ -2,29 +2,35 @@
 
 namespace Utopia\Cdn\Cache\Adapter;
 
+use Psr\Http\Client\ClientInterface;
 use Utopia\Cdn\Cache\Adapter;
 use Utopia\Cdn\Domain;
-use Utopia\Fetch\Client;
-use Utopia\Fetch\Exception as FetchException;
+use Utopia\Cdn\HttpClient;
+use Utopia\Psr7\Header;
+use Utopia\Psr7\Method;
 
 class Fastly implements Adapter
 {
+    private HttpClient $client;
+
     public function __construct(
         private string $apiToken,
         private ?string $serviceId = null,
         private bool $softPurge = false,
-        private ?Client $client = null,
+        ?ClientInterface $client = null,
         private string $apiBase = 'https://api.fastly.com'
     ) {
-        $this->client ??= new Client();
-        $this->client
-            ->setUserAgent('Utopia CDN Fastly Adapter')
-            ->addHeader('Fastly-Key', $this->apiToken)
-            ->addHeader('Accept', 'application/json');
+        $headers = [
+            Header::USER_AGENT => 'Utopia CDN Fastly Adapter',
+            'Fastly-Key' => $this->apiToken,
+            Header::ACCEPT => 'application/json',
+        ];
 
         if ($this->softPurge) {
-            $this->client->addHeader('Fastly-Soft-Purge', '1');
+            $headers['Fastly-Soft-Purge'] = '1';
         }
+
+        $this->client = new HttpClient($client, $headers);
     }
 
     public function purgePaths(string $domain, array $paths): void
@@ -38,7 +44,7 @@ class Fastly implements Adapter
 
         foreach ($paths as $path) {
             $cachedUrl = $domain . $this->encodePath($path);
-            $result = $this->request(Client::METHOD_POST, '/purge/' . $cachedUrl);
+            $result = $this->request(Method::POST, '/purge/' . $cachedUrl);
 
             if ($result['statusCode'] < 200 || $result['statusCode'] >= 300) {
                 throw new \RuntimeException($this->formatError($result));
@@ -54,7 +60,7 @@ class Fastly implements Adapter
         Domain::validate($domain);
         $this->requireServiceId('domain purging');
 
-        $result = $this->request(Client::METHOD_POST, '/service/' . $this->serviceId . '/purge_all');
+        $result = $this->request(Method::POST, '/service/' . $this->serviceId . '/purge_all');
 
         if ($result['statusCode'] < 200 || $result['statusCode'] >= 300) {
             throw new \RuntimeException($this->formatError($result));
@@ -70,7 +76,7 @@ class Fastly implements Adapter
         $this->requireServiceId('cache key purging');
 
         foreach ($keys as $key) {
-            $result = $this->request(Client::METHOD_POST, '/service/' . $this->serviceId . '/purge/' . $key);
+            $result = $this->request(Method::POST, '/service/' . $this->serviceId . '/purge/' . $key);
 
             if ($result['statusCode'] < 200 || $result['statusCode'] >= 300) {
                 throw new \RuntimeException($this->formatError($result));
@@ -115,33 +121,7 @@ class Fastly implements Adapter
      */
     private function request(string $method, string $url): array
     {
-        try {
-            $response = $this->client->fetch(url: $this->apiBase . $url, method: $method);
-
-            return [
-                'statusCode' => $response->getStatusCode(),
-                'response' => $this->decodeResponse($response),
-                'error' => null,
-            ];
-        } catch (FetchException $error) {
-            return [
-                'statusCode' => 0,
-                'response' => null,
-                'error' => $error->getMessage(),
-            ];
-        }
-    }
-
-    /**
-     * @return array<string, mixed>|string|null
-     */
-    private function decodeResponse(\Utopia\Fetch\Response $response): array|string|null
-    {
-        try {
-            return $response->json();
-        } catch (\Throwable) {
-            return $response->text();
-        }
+        return $this->client->request($method, $this->apiBase . $url);
     }
 
 }

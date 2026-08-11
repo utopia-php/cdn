@@ -2,31 +2,36 @@
 
 namespace Utopia\Cdn\Certificates\Provider;
 
+use Psr\Http\Client\ClientInterface;
 use Utopia\Cdn\Certificates\Provider;
 use Utopia\Cdn\Domain;
 use Utopia\Cdn\Exception\UnsupportedOperation;
-use Utopia\Fetch\Client;
-use Utopia\Fetch\Exception as FetchException;
+use Utopia\Cdn\HttpClient;
+use Utopia\Psr7\ContentType;
+use Utopia\Psr7\Header;
+use Utopia\Psr7\Method;
 
 class Cloudflare implements Provider
 {
+    private HttpClient $client;
+
     public function __construct(
         private string $zoneId,
         private string $apiToken,
-        private ?Client $client = null,
+        ?ClientInterface $client = null,
         private string $apiBase = 'https://api.cloudflare.com/client/v4',
     ) {
-        $this->client ??= new Client();
-        $this->client
-            ->setUserAgent('Utopia CDN Cloudflare Certificates Provider')
-            ->addHeader('Authorization', 'Bearer ' . $this->apiToken)
-            ->addHeader('Content-Type', Client::CONTENT_TYPE_APPLICATION_JSON);
+        $this->client = new HttpClient($client, [
+            Header::USER_AGENT => 'Utopia CDN Cloudflare Certificates Provider',
+            Header::AUTHORIZATION => 'Bearer ' . $this->apiToken,
+            Header::CONTENT_TYPE => ContentType::JSON,
+        ]);
     }
 
     public function issueCertificate(string $certName, string $domain, ?string $domainType): ?string
     {
         $domain = Domain::validate($domain);
-        $result = $this->request(Client::METHOD_POST, $this->hostnamesPath(), [
+        $result = $this->request(Method::POST, $this->hostnamesPath(), [
             'hostname' => $domain,
             'ssl' => [
                 'method' => 'http',
@@ -73,14 +78,14 @@ class Cloudflare implements Provider
             throw new \RuntimeException('Cloudflare custom hostname response was missing an ID.');
         }
 
-        $result = $this->request(Client::METHOD_DELETE, $this->hostnamesPath() . '/' . \rawurlencode($id));
+        $result = $this->request(Method::DELETE, $this->hostnamesPath() . '/' . \rawurlencode($id));
         $this->assertSuccess('delete Cloudflare custom hostname', $result);
     }
 
     /** @return array<string, mixed>|null */
     private function findHostname(string $domain): ?array
     {
-        $result = $this->request(Client::METHOD_GET, $this->hostnamesPath() . '?' . \http_build_query(['hostname' => $domain]));
+        $result = $this->request(Method::GET, $this->hostnamesPath() . '?' . \http_build_query(['hostname' => $domain]));
         $this->assertSuccess('fetch Cloudflare custom hostnames', $result);
 
         if (!\is_array($result['response'])) {
@@ -139,17 +144,6 @@ class Cloudflare implements Provider
      */
     private function request(string $method, string $path, ?array $body = null): array
     {
-        try {
-            $response = $this->client->fetch(url: $this->apiBase . $path, method: $method, body: $body);
-            try {
-                $decoded = $response->json();
-            } catch (\Throwable) {
-                $decoded = $response->text();
-            }
-
-            return ['statusCode' => $response->getStatusCode(), 'response' => $decoded, 'error' => null];
-        } catch (FetchException $error) {
-            return ['statusCode' => 0, 'response' => null, 'error' => $error->getMessage()];
-        }
+        return $this->client->request($method, $this->apiBase . $path, $body);
     }
 }

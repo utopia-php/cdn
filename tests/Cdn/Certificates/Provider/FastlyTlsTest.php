@@ -5,7 +5,8 @@ namespace Utopia\Tests\Cdn\Certificates\Provider;
 use PHPUnit\Framework\TestCase;
 use Utopia\Cdn\Certificates\Provider\FastlyTls;
 use Utopia\Cdn\Certificates\Status;
-use Utopia\Fetch\Response;
+use Utopia\Psr7\Response;
+use Utopia\Psr7\Stream;
 use Utopia\Tests\Cdn\TestClient;
 
 class FastlyTlsTest extends TestCase
@@ -13,8 +14,8 @@ class FastlyTlsTest extends TestCase
     public function testIssueCertificateCreatesSubscriptionWhenMissing(): void
     {
         $client = new TestClient([
-            new Response(200, '{"data":[]}', []),
-            new Response(200, '{"data":{"id":"sub_123","attributes":{"state":"pending"}}}', []),
+            new Response(200, body: new Stream('{"data":[]}')),
+            new Response(200, body: new Stream('{"data":{"id":"sub_123","attributes":{"state":"pending"}}}')),
         ]);
 
         $provider = new FastlyTls('token', 'tls-config-id', 'certainly', $client);
@@ -31,8 +32,8 @@ class FastlyTlsTest extends TestCase
     public function testGetCertificateStatusMapsFastlyState(): void
     {
         $client = new TestClient([
-            new Response(200, '{"data":[{"id":"sub_123","attributes":{"state":"issued"}}]}', []),
-            new Response(200, '{"data":[{"id":"sub_123","attributes":{"state":"issued"}}]}', []),
+            new Response(200, body: new Stream('{"data":[{"id":"sub_123","attributes":{"state":"issued"}}]}')),
+            new Response(200, body: new Stream('{"data":[{"id":"sub_123","attributes":{"state":"issued"}}]}')),
         ]);
 
         $provider = new FastlyTls('token', 'tls-config-id', 'certainly', $client);
@@ -44,8 +45,8 @@ class FastlyTlsTest extends TestCase
     public function testDeleteCertificateRemovesSubscription(): void
     {
         $client = new TestClient([
-            new Response(200, '{"data":[{"id":"sub_123","attributes":{"state":"issued"}}]}', []),
-            new Response(204, '', []),
+            new Response(200, body: new Stream('{"data":[{"id":"sub_123","attributes":{"state":"issued"}}]}')),
+            new Response(204),
         ]);
 
         $provider = new FastlyTls('token', 'tls-config-id', 'certainly', $client);
@@ -58,7 +59,7 @@ class FastlyTlsTest extends TestCase
 
     public function testIssueCertificateReturnsRenewDateFromIncludedCertificate(): void
     {
-        $client = new TestClient([new Response(200, \json_encode([
+        $client = new TestClient([new Response(200, body: new Stream(\json_encode([
             'data' => [[
                 'id' => 'sub_123',
                 'attributes' => ['state' => 'issued'],
@@ -69,7 +70,7 @@ class FastlyTlsTest extends TestCase
                 'id' => 'cert_1',
                 'attributes' => ['not_after' => '2027-02-01T00:00:00Z'],
             ]],
-        ]), [])]);
+        ])))]);
 
         $provider = new FastlyTls('token', 'tls-config-id', 'certainly', $client);
         $this->assertSame('2027-01-02 00:00:00.000', $provider->issueCertificate('cert', 'example.com', null));
@@ -78,8 +79,8 @@ class FastlyTlsTest extends TestCase
     public function testRetriesFailedSubscription(): void
     {
         $client = new TestClient([
-            new Response(200, '{"data":[{"id":"sub_123","attributes":{"state":"failed"}}]}', []),
-            new Response(200, '{"data":{"id":"sub_123","attributes":{"state":"processing"}}}', []),
+            new Response(200, body: new Stream('{"data":[{"id":"sub_123","attributes":{"state":"failed"}}]}')),
+            new Response(200, body: new Stream('{"data":{"id":"sub_123","attributes":{"state":"processing"}}}')),
         ]);
         $provider = new FastlyTls('token', 'config', 'certainly', $client);
         $this->assertNull($provider->issueCertificate('cert', 'example.com', null));
@@ -88,7 +89,7 @@ class FastlyTlsTest extends TestCase
 
     public function testRejectsMalformedSuccessfulResponse(): void
     {
-        $provider = new FastlyTls('token', 'config', 'certainly', new TestClient([new Response(200, 'not-json', [])]));
+        $provider = new FastlyTls('token', 'config', 'certainly', new TestClient([new Response(200, body: new Stream('not-json'))]));
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('valid JSON');
         $provider->getCertificateStatus('example.com', null);
