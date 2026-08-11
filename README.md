@@ -21,7 +21,7 @@ The cache API supports three purge modes:
 
 - path purges scoped to a domain
 - domain-wide purges
-- key purges for providers like Fastly
+- key or cache-tag purges for providers like Fastly and Cloudflare
 
 Domains are lowercase hostnames without a scheme or trailing slash. Paths begin with `/`; CDN resources are assumed to use HTTPS.
 
@@ -44,6 +44,11 @@ $cache->purgePaths('example.com', [
 ]);
 
 $cache->purgeDomain('example.com');
+
+$cache->purgeKeys([
+    'host-deadbeef',
+    'deployment-12345',
+]);
 ```
 
 ### Fastly
