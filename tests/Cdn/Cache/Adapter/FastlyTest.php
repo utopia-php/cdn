@@ -4,14 +4,15 @@ namespace Utopia\Tests\Cdn\Cache\Adapter;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Cdn\Cache\Adapter\Fastly;
-use Utopia\Fetch\Response;
+use Utopia\Psr7\Response;
+use Utopia\Psr7\Stream;
 use Utopia\Tests\Cdn\TestClient;
 
 class FastlyTest extends TestCase
 {
     public function testPurgesPathsDomainAndKeys(): void
     {
-        $client = new TestClient(\array_fill(0, 3, new Response(200, '{"status":"ok"}', [])));
+        $client = new TestClient(\array_fill(0, 3, new Response(200, body: new Stream('{"status":"ok"}'))));
         $cdn = new Fastly('token', 'service-id', true, $client);
 
         $cdn->purgePaths('example.com', ['/hello world?x=1']);

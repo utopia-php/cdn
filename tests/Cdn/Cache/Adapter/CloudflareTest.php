@@ -5,14 +5,15 @@ namespace Utopia\Tests\Cdn\Cache\Adapter;
 use PHPUnit\Framework\TestCase;
 use Utopia\Cdn\Cache\Adapter\Cloudflare;
 use Utopia\Cdn\Exception\UnsupportedOperation;
-use Utopia\Fetch\Response;
+use Utopia\Psr7\Response;
+use Utopia\Psr7\Stream;
 use Utopia\Tests\Cdn\TestClient;
 
 class CloudflareTest extends TestCase
 {
     public function testPurgesPathsAndDomain(): void
     {
-        $client = new TestClient([new Response(200, '{"success":true}', []), new Response(200, '{"success":true}', [])]);
+        $client = new TestClient([new Response(200, body: new Stream('{"success":true}')), new Response(200, body: new Stream('{"success":true}'))]);
         $cdn = new Cloudflare('zone-id', 'token', $client);
 
         $cdn->purgePaths('example.com', ['/a', '/b?x=1']);
@@ -24,7 +25,7 @@ class CloudflareTest extends TestCase
 
     public function testBatchesPaths(): void
     {
-        $client = new TestClient([new Response(200, '{"success":true}', []), new Response(200, '{"success":true}', [])]);
+        $client = new TestClient([new Response(200, body: new Stream('{"success":true}')), new Response(200, body: new Stream('{"success":true}'))]);
         $cdn = new Cloudflare('zone', 'token', $client);
         $cdn->purgePaths('example.com', \array_fill(0, 31, '/a'));
         $this->assertCount(2, $client->calls);

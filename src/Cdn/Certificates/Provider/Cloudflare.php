@@ -2,31 +2,35 @@
 
 namespace Utopia\Cdn\Certificates\Provider;
 
+use Psr\Http\Client\ClientExceptionInterface;
+use Psr\Http\Client\ClientInterface;
+use Utopia\Client;
+use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
 use Utopia\Cdn\Certificates\Provider;
 use Utopia\Cdn\Domain;
 use Utopia\Cdn\Exception\UnsupportedOperation;
-use Utopia\Fetch\Client;
-use Utopia\Fetch\Exception as FetchException;
+use Utopia\Psr7\ContentType;
+use Utopia\Psr7\Header;
+use Utopia\Psr7\Method;
+use Utopia\Psr7\Request\Factory as RequestFactory;
 
 class Cloudflare implements Provider
 {
+    private ClientInterface $client;
+
     public function __construct(
         private string $zoneId,
         private string $apiToken,
-        private ?Client $client = null,
+        ?ClientInterface $client = null,
         private string $apiBase = 'https://api.cloudflare.com/client/v4',
     ) {
-        $this->client ??= new Client();
-        $this->client
-            ->setUserAgent('Utopia CDN Cloudflare Certificates Provider')
-            ->addHeader('Authorization', 'Bearer ' . $this->apiToken)
-            ->addHeader('Content-Type', Client::CONTENT_TYPE_APPLICATION_JSON);
+        $this->client = $client ?? new Client(new CurlAdapter());
     }
 
     public function issueCertificate(string $certName, string $domain, ?string $domainType): ?string
     {
         $domain = Domain::validate($domain);
-        $result = $this->request(Client::METHOD_POST, $this->hostnamesPath(), [
+        $result = $this->request(Method::POST, $this->hostnamesPath(), [
             'hostname' => $domain,
             'ssl' => [
                 'method' => 'http',
@@ -73,14 +77,14 @@ class Cloudflare implements Provider
             throw new \RuntimeException('Cloudflare custom hostname response was missing an ID.');
         }
 
-        $result = $this->request(Client::METHOD_DELETE, $this->hostnamesPath() . '/' . \rawurlencode($id));
+        $result = $this->request(Method::DELETE, $this->hostnamesPath() . '/' . \rawurlencode($id));
         $this->assertSuccess('delete Cloudflare custom hostname', $result);
     }
 
     /** @return array<string, mixed>|null */
     private function findHostname(string $domain): ?array
     {
-        $result = $this->request(Client::METHOD_GET, $this->hostnamesPath() . '?' . \http_build_query(['hostname' => $domain]));
+        $result = $this->request(Method::GET, $this->hostnamesPath() . '?' . \http_build_query(['hostname' => $domain]));
         $this->assertSuccess('fetch Cloudflare custom hostnames', $result);
 
         if (!\is_array($result['response'])) {
@@ -139,17 +143,29 @@ class Cloudflare implements Provider
      */
     private function request(string $method, string $path, ?array $body = null): array
     {
-        try {
-            $response = $this->client->fetch(url: $this->apiBase . $path, method: $method, body: $body);
-            try {
-                $decoded = $response->json();
-            } catch (\Throwable) {
-                $decoded = $response->text();
-            }
+        $factory = new RequestFactory();
+        $request = $body === null
+            ? $factory->createRequest($method, $this->apiBase . $path)
+            : $factory->json($method, $this->apiBase . $path, $body);
+        $request = $request
+            ->withHeader(Header::USER_AGENT, 'Utopia CDN Cloudflare Certificates Provider')
+            ->withHeader(Header::AUTHORIZATION, 'Bearer ' . $this->apiToken)
+            ->withHeader(Header::CONTENT_TYPE, ContentType::JSON);
 
-            return ['statusCode' => $response->getStatusCode(), 'response' => $decoded, 'error' => null];
-        } catch (FetchException $error) {
+        try {
+            $response = $this->client->sendRequest($request);
+        } catch (ClientExceptionInterface $error) {
             return ['statusCode' => 0, 'response' => null, 'error' => $error->getMessage()];
         }
+
+        $contents = (string) $response->getBody();
+
+        try {
+            $decoded = \json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            $decoded = $contents;
+        }
+
+        return ['statusCode' => $response->getStatusCode(), 'response' => $decoded, 'error' => null];
     }
 }

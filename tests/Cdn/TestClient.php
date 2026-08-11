@@ -2,10 +2,12 @@
 
 namespace Utopia\Tests\Cdn;
 
-use Utopia\Fetch\Client;
-use Utopia\Fetch\Response;
+use Psr\Http\Client\ClientInterface;
+use Psr\Http\Message\RequestInterface;
+use Psr\Http\Message\ResponseInterface;
+use Utopia\Psr7\Response;
 
-class TestClient extends Client
+class TestClient implements ClientInterface
 {
     /**
      * @var array<int, array{url:string,method:string,body:mixed}>
@@ -16,38 +18,27 @@ class TestClient extends Client
     public array $headers = [];
 
     /**
-     * @param array<int, Response> $responses
+     * @param array<int, ResponseInterface> $responses
      */
     public function __construct(private array $responses)
     {
     }
 
-    public function addHeader(string $key, string $value): Client
+    public function sendRequest(RequestInterface $request): ResponseInterface
     {
-        $this->headers[\strtolower($key)] = $value;
-
-        return $this;
-    }
-
-    public function fetch(
-        string $url,
-        string $method = self::METHOD_GET,
-        array|string|null $body = [],
-        ?array $query = [],
-        ?callable $chunks = null,
-        ?int $timeoutMs = null,
-        ?int $connectTimeoutMs = null,
-    ): Response {
-        if ($query) {
-            $url = \rtrim($url, '?') . '?' . \http_build_query($query);
+        foreach ($request->getHeaders() as $name => $values) {
+            $this->headers[\strtolower($name)] = \implode(', ', $values);
         }
 
+        $body = (string) $request->getBody();
+        $decoded = \json_decode($body, true);
+
         $this->calls[] = [
-            'url' => $url,
-            'method' => $method,
-            'body' => $body,
+            'url' => (string) $request->getUri(),
+            'method' => $request->getMethod(),
+            'body' => \json_last_error() === JSON_ERROR_NONE ? $decoded : $body,
         ];
 
-        return \array_shift($this->responses) ?? new Response(500, '', []);
+        return \array_shift($this->responses) ?? new Response(500);
     }
 }
