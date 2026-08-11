@@ -8,7 +8,6 @@ use Utopia\Client;
 use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
 use Utopia\Cdn\Cache\Adapter;
 use Utopia\Cdn\Domain;
-use Utopia\Cdn\Exception\UnsupportedOperation;
 use Utopia\Psr7\ContentType;
 use Utopia\Psr7\Header;
 use Utopia\Psr7\Method;
@@ -80,7 +79,17 @@ class Cloudflare implements Adapter
             return;
         }
 
-        throw new UnsupportedOperation('Cloudflare cache key purging is not supported by this adapter.');
+        foreach (\array_chunk($keys, 30) as $chunk) {
+            $result = $this->request(
+                method: Method::POST,
+                url: '/zones/' . $this->zoneId . '/purge_cache',
+                body: ['tags' => $chunk],
+            );
+
+            if (!$this->isSuccess($result)) {
+                throw new \RuntimeException($this->formatError('Cloudflare', $result));
+            }
+        }
     }
 
     /**
