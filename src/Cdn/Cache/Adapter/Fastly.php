@@ -2,16 +2,19 @@
 
 namespace Utopia\Cdn\Cache\Adapter;
 
+use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
+use Utopia\Client;
+use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
 use Utopia\Cdn\Cache\Adapter;
 use Utopia\Cdn\Domain;
-use Utopia\Cdn\HttpClient;
 use Utopia\Psr7\Header;
 use Utopia\Psr7\Method;
+use Utopia\Psr7\Request\Factory as RequestFactory;
 
 class Fastly implements Adapter
 {
-    private HttpClient $client;
+    private ClientInterface $client;
 
     public function __construct(
         private string $apiToken,
@@ -20,17 +23,7 @@ class Fastly implements Adapter
         ?ClientInterface $client = null,
         private string $apiBase = 'https://api.fastly.com'
     ) {
-        $headers = [
-            Header::USER_AGENT => 'Utopia CDN Fastly Adapter',
-            'Fastly-Key' => $this->apiToken,
-            Header::ACCEPT => 'application/json',
-        ];
-
-        if ($this->softPurge) {
-            $headers['Fastly-Soft-Purge'] = '1';
-        }
-
-        $this->client = new HttpClient($client, $headers);
+        $this->client = $client ?? new Client(new CurlAdapter());
     }
 
     public function purgePaths(string $domain, array $paths): void
@@ -121,7 +114,30 @@ class Fastly implements Adapter
      */
     private function request(string $method, string $url): array
     {
-        return $this->client->request($method, $this->apiBase . $url);
-    }
+        $request = (new RequestFactory())
+            ->createRequest($method, $this->apiBase . $url)
+            ->withHeader(Header::USER_AGENT, 'Utopia CDN Fastly Adapter')
+            ->withHeader('Fastly-Key', $this->apiToken)
+            ->withHeader(Header::ACCEPT, 'application/json');
 
+        if ($this->softPurge) {
+            $request = $request->withHeader('Fastly-Soft-Purge', '1');
+        }
+
+        try {
+            $response = $this->client->sendRequest($request);
+        } catch (ClientExceptionInterface $error) {
+            return ['statusCode' => 0, 'response' => null, 'error' => $error->getMessage()];
+        }
+
+        $contents = (string) $response->getBody();
+
+        try {
+            $decoded = \json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            $decoded = $contents;
+        }
+
+        return ['statusCode' => $response->getStatusCode(), 'response' => $decoded, 'error' => null];
+    }
 }

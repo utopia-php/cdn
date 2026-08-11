@@ -2,18 +2,21 @@
 
 namespace Utopia\Cdn\Certificates\Provider;
 
+use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
+use Utopia\Client;
+use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
 use Utopia\Cdn\Certificates\Provider;
 use Utopia\Cdn\Domain;
 use Utopia\Cdn\Exception\UnsupportedOperation;
-use Utopia\Cdn\HttpClient;
 use Utopia\Psr7\ContentType;
 use Utopia\Psr7\Header;
 use Utopia\Psr7\Method;
+use Utopia\Psr7\Request\Factory as RequestFactory;
 
 class Cloudflare implements Provider
 {
-    private HttpClient $client;
+    private ClientInterface $client;
 
     public function __construct(
         private string $zoneId,
@@ -21,11 +24,7 @@ class Cloudflare implements Provider
         ?ClientInterface $client = null,
         private string $apiBase = 'https://api.cloudflare.com/client/v4',
     ) {
-        $this->client = new HttpClient($client, [
-            Header::USER_AGENT => 'Utopia CDN Cloudflare Certificates Provider',
-            Header::AUTHORIZATION => 'Bearer ' . $this->apiToken,
-            Header::CONTENT_TYPE => ContentType::JSON,
-        ]);
+        $this->client = $client ?? new Client(new CurlAdapter());
     }
 
     public function issueCertificate(string $certName, string $domain, ?string $domainType): ?string
@@ -144,6 +143,29 @@ class Cloudflare implements Provider
      */
     private function request(string $method, string $path, ?array $body = null): array
     {
-        return $this->client->request($method, $this->apiBase . $path, $body);
+        $factory = new RequestFactory();
+        $request = $body === null
+            ? $factory->createRequest($method, $this->apiBase . $path)
+            : $factory->json($method, $this->apiBase . $path, $body);
+        $request = $request
+            ->withHeader(Header::USER_AGENT, 'Utopia CDN Cloudflare Certificates Provider')
+            ->withHeader(Header::AUTHORIZATION, 'Bearer ' . $this->apiToken)
+            ->withHeader(Header::CONTENT_TYPE, ContentType::JSON);
+
+        try {
+            $response = $this->client->sendRequest($request);
+        } catch (ClientExceptionInterface $error) {
+            return ['statusCode' => 0, 'response' => null, 'error' => $error->getMessage()];
+        }
+
+        $contents = (string) $response->getBody();
+
+        try {
+            $decoded = \json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            $decoded = $contents;
+        }
+
+        return ['statusCode' => $response->getStatusCode(), 'response' => $decoded, 'error' => null];
     }
 }

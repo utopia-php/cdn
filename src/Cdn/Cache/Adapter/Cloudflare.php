@@ -2,18 +2,21 @@
 
 namespace Utopia\Cdn\Cache\Adapter;
 
+use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
+use Utopia\Client;
+use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
 use Utopia\Cdn\Cache\Adapter;
 use Utopia\Cdn\Domain;
 use Utopia\Cdn\Exception\UnsupportedOperation;
-use Utopia\Cdn\HttpClient;
 use Utopia\Psr7\ContentType;
 use Utopia\Psr7\Header;
 use Utopia\Psr7\Method;
+use Utopia\Psr7\Request\Factory as RequestFactory;
 
 class Cloudflare implements Adapter
 {
-    private HttpClient $client;
+    private ClientInterface $client;
 
     public function __construct(
         private string $zoneId,
@@ -21,11 +24,7 @@ class Cloudflare implements Adapter
         ?ClientInterface $client = null,
         private string $apiBase = 'https://api.cloudflare.com/client/v4'
     ) {
-        $this->client = new HttpClient($client, [
-            Header::USER_AGENT => 'Utopia CDN Cloudflare Adapter',
-            Header::AUTHORIZATION => 'Bearer ' . $this->apiToken,
-            Header::CONTENT_TYPE => ContentType::JSON,
-        ]);
+        $this->client = $client ?? new Client(new CurlAdapter());
     }
 
     public function purgePaths(string $domain, array $paths): void
@@ -106,7 +105,26 @@ class Cloudflare implements Adapter
      */
     private function request(string $method, string $url, ?array $body = null): array
     {
-        return $this->client->request($method, $this->apiBase . $url, $body);
-    }
+        $request = (new RequestFactory())->json($method, $this->apiBase . $url, $body);
+        $request = $request
+            ->withHeader(Header::USER_AGENT, 'Utopia CDN Cloudflare Adapter')
+            ->withHeader(Header::AUTHORIZATION, 'Bearer ' . $this->apiToken)
+            ->withHeader(Header::CONTENT_TYPE, ContentType::JSON);
 
+        try {
+            $response = $this->client->sendRequest($request);
+        } catch (ClientExceptionInterface $error) {
+            return ['statusCode' => 0, 'response' => null, 'error' => $error->getMessage()];
+        }
+
+        $contents = (string) $response->getBody();
+
+        try {
+            $decoded = \json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            $decoded = $contents;
+        }
+
+        return ['statusCode' => $response->getStatusCode(), 'response' => $decoded, 'error' => null];
+    }
 }
