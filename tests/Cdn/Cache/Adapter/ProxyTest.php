@@ -10,7 +10,7 @@ use Utopia\Cdn\Exception\UnsupportedOperation;
 
 class ProxyTest extends TestCase
 {
-    public function testRoutesAndFansOut(): void
+    public function testRoutesDomainsAndPaths(): void
     {
         $calls = new \ArrayObject();
         $app = $this->adapter('app', $calls);
@@ -22,9 +22,8 @@ class ProxyTest extends TestCase
         $proxy->purgeDomain('app.example.com');
         $proxy->purgePaths('network.example.com', ['/a']);
         $proxy->purgeDomain('customer.example.com');
-        $proxy->purgeKeys(['key']);
 
-        $this->assertSame(['app:domain', 'network:paths', 'custom-a:domain', 'custom-b:domain', 'app:keys', 'network:keys', 'custom-a:keys', 'custom-b:keys'], $calls->getArrayCopy());
+        $this->assertSame(['app:domain', 'network:paths', 'custom-a:domain', 'custom-b:domain'], $calls->getArrayCopy());
     }
 
     public function testRejectsMissingCustomAdapters(): void
@@ -35,33 +34,36 @@ class ProxyTest extends TestCase
         $proxy->purgeDomain('custom.example.com');
     }
 
-    public function testKeyPurgeSkipsUnsupportedAdapters(): void
+    public function testRejectsKeyPurgeWithoutServiceOrZoneSelection(): void
     {
         $calls = new \ArrayObject();
-        $unsupported = $this->adapter('cloudflare', $calls, false);
-        $fastly = $this->adapter('fastly', $calls);
-        $proxy = new Proxy('app.example.com', $unsupported, $fastly, [$unsupported, $fastly]);
-
-        $proxy->purgeKeys(['key']);
-
-        $this->assertSame(['fastly:keys'], $calls->getArrayCopy());
-    }
-
-    public function testKeyPurgeFailsWhenEveryAdapterIsUnsupported(): void
-    {
-        $unsupported = $this->adapter('cloudflare', new \ArrayObject(), false);
-        $proxy = new Proxy('app.example.com', $unsupported, $unsupported, [$unsupported]);
+        $app = $this->adapter('app', $calls);
+        $network = $this->adapter('network', $calls);
+        $custom = $this->adapter('custom', $calls);
+        $proxy = new Proxy('app.example.com', $app, $network, [$custom]);
 
         $this->expectException(UnsupportedOperation::class);
+        $this->expectExceptionMessage('Select the service or zone adapter');
         $proxy->purgeKeys(['key']);
+    }
+
+    public function testEmptyKeyPurgeIsANoOp(): void
+    {
+        $calls = new \ArrayObject();
+        $adapter = $this->adapter('adapter', $calls);
+        $proxy = new Proxy('app.example.com', $adapter, $adapter, [$adapter]);
+
+        $proxy->purgeKeys([]);
+
+        $this->assertSame([], $calls->getArrayCopy());
     }
 
     /** @param \ArrayObject<int, mixed> $calls */
-    private function adapter(string $name, \ArrayObject $calls, bool $supportsKeys = true): Adapter
+    private function adapter(string $name, \ArrayObject $calls): Adapter
     {
-        return new class ($name, $calls, $supportsKeys) implements Adapter {
+        return new class ($name, $calls) implements Adapter {
             /** @param \ArrayObject<int, mixed> $calls */
-            public function __construct(private string $name, private \ArrayObject $calls, private bool $supportsKeys)
+            public function __construct(private string $name, private \ArrayObject $calls)
             {
             }
             public function purgePaths(string $domain, array $paths): void
@@ -74,9 +76,6 @@ class ProxyTest extends TestCase
             }
             public function purgeKeys(array $keys): void
             {
-                if (!$this->supportsKeys) {
-                    throw new UnsupportedOperation('Unsupported.');
-                }
                 $this->calls->append($this->name . ':keys');
             }
         };
