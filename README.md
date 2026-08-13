@@ -61,6 +61,7 @@ use Utopia\Cdn\Cache\Adapter\Fastly;
 
 $cache = new Cache(new Fastly(
     apiToken: 'YOUR_API_TOKEN',
+    domainKeyPrefix: 'domain-',
     serviceId: 'YOUR_SERVICE_ID',
     softPurge: false
 ));
@@ -70,13 +71,28 @@ $cache->purgePaths('example.com', [
     '/files/logo.svg',
 ]);
 
+// Purges the surrogate key "domain-example.com".
+$cache->purgeDomain('example.com');
+
 $cache->purgeKeys([
     'host-deadbeef',
     'deployment-12345',
 ]);
 ```
 
-Fastly domain purges invalidate the entire configured service. Use one domain per Fastly service when calling `purgeDomain()`. Cloudflare hostname purging depends on the cache-purge features enabled for your plan.
+`domainKeyPrefix` is required because [Fastly has no purge-by-host operation](https://www.fastly.com/documentation/reference/api/purging/) — its purge API offers URL, surrogate key and whole-service purges and nothing in between. A domain is addressed by the surrogate key the origin attaches to every response it serves for that domain, so the adapter has to know how those keys are named. Pass `''` when the key is the bare hostname.
+
+Keys are sent as given, in the request body, batched up to 256 per request. A Fastly adapter with no service ID can still purge paths; key and domain purges raise `Exception\UnsupportedOperation`.
+
+`purgeService()` purges everything on the service and is deliberately **not** part of the `Adapter` interface, so no caller asking to purge a domain, a path or a key can reach it: Fastly documents `purge_all` as taking up to two minutes, being incompatible with soft purge, and likely to spike origin traffic on a busy service.
+
+```php
+// Only on the concrete adapter, never through Cache.
+$fastly = new Fastly(apiToken: 'YOUR_API_TOKEN', domainKeyPrefix: 'domain-', serviceId: 'YOUR_SERVICE_ID');
+$fastly->purgeService();
+```
+
+Cloudflare hostname purging is [available on all plans](https://developers.cloudflare.com/changelog/post/2025-04-01-purge-for-all/) and purges up to 30 hostnames per request.
 
 ### Cache routing
 
