@@ -51,6 +51,25 @@ $cache->purgeKeys([
 ]);
 ```
 
+Cloudflare purges a hostname natively, so `purgeDomain()` evicts everything served for that hostname and nothing served for another. Every purge method is [available on all plans](https://developers.cloudflare.com/changelog/post/2025-04-01-purge-for-all/). `purgeKeys()` purges cache tags, which only match responses the origin tagged with a `Cache-Tag` header.
+
+URLs, hostnames and tags are batched. Cloudflare's own pages disagree about the ceiling — the purge overview says 100 items per request while the purge-by-hostname page says 30 — so the default is the lower figure. Raise it if your plan and reading say otherwise:
+
+```php
+$cache = new Cache(new Cloudflare(
+    zoneId: 'YOUR_ZONE_ID',
+    apiToken: 'YOUR_API_TOKEN',
+    itemsPerPurge: 100
+));
+```
+
+`purgeZone()` purges every cached response in the zone (`purge_everything`). Like its Fastly counterpart it is **not** part of the `Adapter` interface:
+
+```php
+$cloudflare = new Cloudflare(zoneId: 'YOUR_ZONE_ID', apiToken: 'YOUR_API_TOKEN');
+$cloudflare->purgeZone();
+```
+
 ### Fastly
 
 ```php
@@ -61,6 +80,7 @@ use Utopia\Cdn\Cache\Adapter\Fastly;
 
 $cache = new Cache(new Fastly(
     apiToken: 'YOUR_API_TOKEN',
+    domainKeyPrefix: 'domain-',
     serviceId: 'YOUR_SERVICE_ID',
     softPurge: false
 ));
@@ -70,13 +90,42 @@ $cache->purgePaths('example.com', [
     '/files/logo.svg',
 ]);
 
+// Purges the surrogate key "domain-example.com".
+$cache->purgeDomain('example.com');
+
 $cache->purgeKeys([
     'host-deadbeef',
     'deployment-12345',
 ]);
 ```
 
-Fastly domain purges invalidate the entire configured service. Use one domain per Fastly service when calling `purgeDomain()`. Cloudflare hostname purging depends on the cache-purge features enabled for your plan.
+`domainKeyPrefix` is required because [Fastly has no purge-by-host operation](https://www.fastly.com/documentation/reference/api/purging/) — its purge API offers URL, surrogate key and whole-service purges and nothing in between. A domain is addressed by the surrogate key the origin attaches to every response it serves for that domain, so the adapter has to know how those keys are named. Pass `''` when the key is the bare hostname.
+
+Keys are sent as given, in the request body, batched up to 256 per request. A Fastly adapter with no service ID can still purge paths; key and domain purges raise `Exception\UnsupportedOperation`.
+
+`purgeZone()` purges everything on the service and is deliberately **not** part of the `Adapter` interface, so no caller asking to purge a domain, a path or a key can reach it: Fastly documents `purge_all` as taking up to two minutes, being incompatible with soft purge, and likely to spike origin traffic on a busy service.
+
+```php
+// Only on the concrete adapter, never through Cache.
+$fastly = new Fastly(apiToken: 'YOUR_API_TOKEN', domainKeyPrefix: 'domain-', serviceId: 'YOUR_SERVICE_ID');
+$fastly->purgeZone();
+```
+
+### Adding an operation to an adapter
+
+`Cache\Adapter\Fastly` and `Cache\Adapter\Cloudflare` extend `Cache\Adapter\Api`, which owns the part every provider shares: authenticate a request, send it, decide whether the answer means success, and turn a failure into a message. An adapter supplies the provider-specific pieces — `authenticate()`, `isSuccess()`, `formatError()` and a `USER_AGENT` — and each operation is then only the request it makes:
+
+```php
+// One call.
+$this->send(Method::POST, '/zones/' . $this->zoneId . '/purge_cache', ['purge_everything' => true]);
+
+// As few calls as the provider's per-request ceiling allows.
+$this->batch($keys, self::KEYS_PER_PURGE, function (array $chunk): void {
+    $this->send(Method::POST, '/service/' . $this->serviceId . '/purge', ['surrogate_keys' => $chunk]);
+});
+```
+
+Operations only a single provider offers — `purgeZone()` on both adapters today — live on the concrete adapter rather than on the `Adapter` interface, so a routing adapter can never reach them by fanning out an interface method.
 
 ### Cache balancing
 
