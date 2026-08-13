@@ -16,11 +16,13 @@ class CacheTest extends TestCase
         $cache->purgePaths('example.com', ['/file.png']);
         $cache->purgeDomain('example.com');
         $cache->purgeKeys(['key']);
+        $cache->purgeZone();
 
         $this->assertSame([
             ['paths' => ['example.com', ['/file.png']]],
             ['domain' => 'example.com'],
             ['keys' => ['key']],
+            ['zone' => true],
         ], $calls->getArrayCopy());
     }
 
@@ -51,6 +53,10 @@ class CacheTest extends TestCase
             public function purgeKeys(array $keys): void
             {
                 $this->calls->append(['keys' => $keys]);
+            }
+            public function purgeZone(): void
+            {
+                $this->calls->append(['zone' => true]);
             }
         };
     }

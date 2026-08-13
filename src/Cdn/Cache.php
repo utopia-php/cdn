@@ -30,4 +30,12 @@ class Cache
     {
         $this->adapter->purgeKeys($keys);
     }
+
+    /**
+     * Purges the adapter's entire cache. Prefer purgeDomain() or purgeKeys().
+     */
+    public function purgeZone(): void
+    {
+        $this->adapter->purgeZone();
+    }
 }
