@@ -91,15 +91,14 @@ use Utopia\Balancer\Algorithm\First;
 use Utopia\Balancer\Balancer;
 use Utopia\Cdn\Cache;
 use Utopia\Cdn\Cache\Adapter\Balancer as BalancerAdapter;
-use Utopia\Cdn\Cache\Adapter\Cloudflare;
-use Utopia\Cdn\Cache\Adapter\Fastly;
 use Utopia\Cdn\Extend\CdnOption;
 use Utopia\Cdn\Provider;
 
+// $fastlyEdge, $fastlyRun and $cloudflare are adapters built as shown above.
 $balancer = (new Balancer(new First()))
-    ->addOption(new CdnOption(new Fastly($token, $edgeServiceId), Provider::FASTLY, edge: true))
-    ->addOption(new CdnOption(new Fastly($token, $runServiceId), Provider::FASTLY))
-    ->addOption(new CdnOption(new Cloudflare($zoneId, $token), Provider::CLOUDFLARE));
+    ->addOption(new CdnOption($fastlyEdge, Provider::FASTLY, edge: true))
+    ->addOption(new CdnOption($fastlyRun, Provider::FASTLY))
+    ->addOption(new CdnOption($cloudflare, Provider::CLOUDFLARE));
 
 // Custom domains are cached by the run service and by Cloudflare, so purge both.
 $balancer->addFilter(fn (CdnOption $option): bool => !$option->isEdge());
