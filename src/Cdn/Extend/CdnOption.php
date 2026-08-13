@@ -5,7 +5,6 @@ namespace Utopia\Cdn\Extend;
 use Utopia\Balancer\Option;
 use Utopia\Cdn\Cache\Adapter;
 use Utopia\Cdn\Exception\Configuration;
-use Utopia\Cdn\Provider;
 
 /**
  * A balancer option that carries a cache adapter.
@@ -25,10 +24,10 @@ class CdnOption extends Option
 
     /**
      * @param Adapter $adapter Purges cached content for this option.
-     * @param Provider $provider Vendor the adapter talks to.
+     * @param string $provider Vendor the adapter talks to, one of the Provider constants.
      * @param bool $edge Whether the option fronts the platform's own edge network rather than customer-owned custom domains.
      */
-    public function __construct(Adapter $adapter, Provider $provider, bool $edge = false)
+    public function __construct(Adapter $adapter, string $provider, bool $edge = false)
     {
         parent::__construct([
             self::ADAPTER => $adapter,
@@ -50,12 +49,12 @@ class CdnOption extends Option
         return $adapter;
     }
 
-    public function getProvider(): Provider
+    public function getProvider(): string
     {
         $provider = $this->getState(self::PROVIDER);
 
-        if (!$provider instanceof Provider) {
-            throw new Configuration('Option state "' . self::PROVIDER . '" must be a ' . Provider::class . '.');
+        if (!\is_string($provider)) {
+            throw new Configuration('Option state "' . self::PROVIDER . '" must be a string.');
         }
 
         return $provider;

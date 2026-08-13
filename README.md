@@ -97,28 +97,29 @@ Cloudflare hostname purging depends on the cache-purge features enabled for your
 
 `Cache\Adapter\Balancer` turns provider selection into configuration. Every provider is declared once as an option, filters decide which options a purge applies to, and the purge then reaches **all** of them — a domain cached by two providers has to be evicted from both.
 
-Options are `Extend\CdnOption`, a [utopia-php/balancer](https://github.com/utopia-php/balancer) `Option` with typed accessors, so a filter reads `$option->getProvider()` rather than guessing a state key:
+Options are `Extend\CdnOption`, a [utopia-php/balancer](https://github.com/utopia-php/balancer) `Option` with typed accessors, so a filter reads `$option->getProvider()` rather than guessing a state key. The balancer itself is the library's own, unwrapped:
 
 ```php
 <?php
 
+use Utopia\Balancer\Algorithm\First;
+use Utopia\Balancer\Balancer;
 use Utopia\Cdn\Cache;
-use Utopia\Cdn\Cache\Adapter\Balancer;
+use Utopia\Cdn\Cache\Adapter\Balancer as BalancerAdapter;
 use Utopia\Cdn\Cache\Adapter\Cloudflare;
 use Utopia\Cdn\Cache\Adapter\Fastly;
-use Utopia\Cdn\Extend\CdnBalancer;
 use Utopia\Cdn\Extend\CdnOption;
 use Utopia\Cdn\Provider;
 
-$balancer = (new CdnBalancer())
-    ->addOption(new CdnOption(new Fastly($token, $edgeServiceId, domainKeyPrefix: 'domain-'), Provider::Fastly, edge: true))
-    ->addOption(new CdnOption(new Fastly($token, $runServiceId, domainKeyPrefix: 'domain-'), Provider::Fastly))
-    ->addOption(new CdnOption(new Cloudflare($zoneId, $token), Provider::Cloudflare));
+$balancer = (new Balancer(new First()))
+    ->addOption(new CdnOption(new Fastly($token, $edgeServiceId, domainKeyPrefix: 'domain-'), Provider::FASTLY, edge: true))
+    ->addOption(new CdnOption(new Fastly($token, $runServiceId, domainKeyPrefix: 'domain-'), Provider::FASTLY))
+    ->addOption(new CdnOption(new Cloudflare($zoneId, $token), Provider::CLOUDFLARE));
 
 // Custom domains are cached by the run service and by Cloudflare, so purge both.
 $balancer->addFilter(fn (CdnOption $option): bool => !$option->isEdge());
 
-$cache = new Cache(new Balancer($balancer));
+$cache = new Cache(new BalancerAdapter($balancer));
 
 $cache->purgeDomain('customer.example.com');
 ```
@@ -127,13 +128,13 @@ $cache->purgeDomain('customer.example.com');
 
 ```php
 $balancer
-    ->addFilter(fn (CdnOption $option): bool => $option->getProvider() === Provider::Fastly)
+    ->addFilter(fn (CdnOption $option): bool => $option->getProvider() === Provider::FASTLY)
     ->addFilter(fn (CdnOption $option): bool => $option->isEdge());
 ```
 
 Failures are aggregated rather than short-circuiting: every matching option is attempted, then the collected errors are raised together as `Exception\Purge`, whose `getErrors()` returns one throwable per failed provider. A provider outage therefore cannot stop the purge from reaching the others. When no option matches the filters, the purge raises `Exception\Configuration` instead of passing silently.
 
-`CdnBalancer` also keeps the base balancer's `run()`, for callers that do want a single option chosen by an `Algorithm`.
+Options stay ordinary balancer options, so `run()` still picks a single one through the `Algorithm` for callers that want exactly that.
 
 ### Cache routing
 

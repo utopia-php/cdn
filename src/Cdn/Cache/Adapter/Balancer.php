@@ -2,12 +2,13 @@
 
 namespace Utopia\Cdn\Cache\Adapter;
 
+use Utopia\Balancer\Balancer as OptionBalancer;
 use Utopia\Cdn\Cache\Adapter;
 use Utopia\Cdn\Domain;
 use Utopia\Cdn\Exception\Configuration;
 use Utopia\Cdn\Exception\Purge;
 use Utopia\Cdn\Exception\UnsupportedOperation;
-use Utopia\Cdn\Extend\CdnBalancer;
+use Utopia\Cdn\Extend\CdnOption;
 
 /**
  * Purges through every option a balancer's filters leave standing.
@@ -24,7 +25,7 @@ use Utopia\Cdn\Extend\CdnBalancer;
  */
 class Balancer implements Adapter
 {
-    public function __construct(private CdnBalancer $balancer)
+    public function __construct(private OptionBalancer $balancer)
     {
     }
 
@@ -80,6 +81,11 @@ class Balancer implements Adapter
         $purged = false;
 
         foreach ($options as $option) {
+            // A balancer accepts any option, so what it is holding is checked here.
+            if (!$option instanceof CdnOption) {
+                throw new Configuration('Cache options must be instances of ' . CdnOption::class . '.');
+            }
+
             try {
                 $purge($option->getAdapter());
                 $purged = true;
@@ -89,7 +95,7 @@ class Balancer implements Adapter
                 continue;
             } catch (\Throwable $error) {
                 $errors[] = $error;
-                $failed[] = $option->getProvider()->value;
+                $failed[] = $option->getProvider();
             }
         }
 

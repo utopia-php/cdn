@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "4ac9a36cf4ffcdd49e63edd345e41a9d",
+    "content-hash": "748aac7ca301b3fc2cfa0971e3bfde4d",
     "packages": [
         {
             "name": "brick/math",
@@ -1879,24 +1879,25 @@
         },
         {
             "name": "utopia-php/balancer",
-            "version": "0.4.0",
+            "version": "dev-feat-filtered-options",
             "source": {
                 "type": "git",
                 "url": "https://github.com/utopia-php/balancer.git",
-                "reference": "b281cf22cba25429384cd792a9b0df83b5f9f938"
+                "reference": "88a2e7e20037e3aedb6a3434efe9563a7d0d70b3"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/utopia-php/balancer/zipball/b281cf22cba25429384cd792a9b0df83b5f9f938",
-                "reference": "b281cf22cba25429384cd792a9b0df83b5f9f938",
+                "url": "https://api.github.com/repos/utopia-php/balancer/zipball/88a2e7e20037e3aedb6a3434efe9563a7d0d70b3",
+                "reference": "88a2e7e20037e3aedb6a3434efe9563a7d0d70b3",
                 "shasum": ""
             },
             "require": {
-                "php": ">=8.0"
+                "php": ">=8.1",
+                "utopia-php/telemetry": "0.1.*|0.4.*"
             },
             "require-dev": {
                 "laravel/pint": "1.2.*",
-                "phpstan/phpstan": "1.8.*",
+                "phpstan/phpstan": "^1.8",
                 "phpunit/phpunit": "^9.3"
             },
             "type": "library",
@@ -1920,9 +1921,9 @@
             ],
             "support": {
                 "issues": "https://github.com/utopia-php/balancer/issues",
-                "source": "https://github.com/utopia-php/balancer/tree/0.4.0"
+                "source": "https://github.com/utopia-php/balancer/tree/feat-filtered-options"
             },
-            "time": "2023-08-07T10:26:14+00:00"
+            "time": "2026-08-13T15:32:05+00:00"
         },
         {
             "name": "utopia-php/client",
@@ -3952,7 +3953,9 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": {},
+    "stability-flags": {
+        "utopia-php/balancer": 20
+    },
     "prefer-stable": false,
     "prefer-lowest": false,
     "platform": {

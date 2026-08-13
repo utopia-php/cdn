@@ -8,11 +8,11 @@ namespace Utopia\Cdn;
  * Kept separate from the adapter class so filters and error messages can talk
  * about a provider without depending on a concrete adapter implementation.
  */
-enum Provider: string
+class Provider
 {
-    case Fastly = 'fastly';
+    public const string FASTLY = 'fastly';
 
-    case Cloudflare = 'cloudflare';
+    public const string CLOUDFLARE = 'cloudflare';
 
-    case Proxy = 'proxy';
+    public const string PROXY = 'proxy';
 }
