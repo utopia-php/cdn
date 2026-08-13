@@ -76,7 +76,64 @@ $cache->purgeKeys([
 ]);
 ```
 
-Fastly domain purges invalidate the entire configured service. Use one domain per Fastly service when calling `purgeDomain()`. Cloudflare hostname purging depends on the cache-purge features enabled for your plan.
+Fastly domain purges invalidate the entire configured service, so use one domain per Fastly service when calling `purgeDomain()`. When a service fronts many domains and the origin tags every response with a per-domain surrogate key, pass `domainKeyPrefix` instead and `purgeDomain()` purges that key rather than the whole service:
+
+```php
+$cache = new Cache(new Fastly(
+    apiToken: 'YOUR_API_TOKEN',
+    serviceId: 'YOUR_SHARED_SERVICE_ID',
+    domainKeyPrefix: 'domain-'
+));
+
+// Purges the surrogate key "domain-example.com", leaving other domains cached.
+$cache->purgeDomain('example.com');
+```
+
+Cache keys are encoded by the adapter, so pass them raw. A Fastly adapter with no service ID can still purge paths; key and domain purges raise `Exception\UnsupportedOperation`, which lets the balancer below skip it and purge the remaining providers.
+
+Cloudflare hostname purging depends on the cache-purge features enabled for your plan.
+
+### Cache balancing
+
+`Cache\Adapter\Balancer` turns provider selection into configuration. Every provider is declared once as an option, filters decide which options a purge applies to, and the purge then reaches **all** of them — a domain cached by two providers has to be evicted from both.
+
+Options are `Extend\CdnOption`, a [utopia-php/balancer](https://github.com/utopia-php/balancer) `Option` with typed accessors, so a filter reads `$option->getProvider()` rather than guessing a state key:
+
+```php
+<?php
+
+use Utopia\Cdn\Cache;
+use Utopia\Cdn\Cache\Adapter\Balancer;
+use Utopia\Cdn\Cache\Adapter\Cloudflare;
+use Utopia\Cdn\Cache\Adapter\Fastly;
+use Utopia\Cdn\Extend\CdnBalancer;
+use Utopia\Cdn\Extend\CdnOption;
+use Utopia\Cdn\Provider;
+
+$balancer = (new CdnBalancer())
+    ->addOption(new CdnOption(new Fastly($token, $edgeServiceId, domainKeyPrefix: 'domain-'), Provider::Fastly, edge: true))
+    ->addOption(new CdnOption(new Fastly($token, $runServiceId, domainKeyPrefix: 'domain-'), Provider::Fastly))
+    ->addOption(new CdnOption(new Cloudflare($zoneId, $token), Provider::Cloudflare));
+
+// Custom domains are cached by the run service and by Cloudflare, so purge both.
+$balancer->addFilter(fn (CdnOption $option): bool => !$option->isEdge());
+
+$cache = new Cache(new Balancer($balancer));
+
+$cache->purgeDomain('customer.example.com');
+```
+
+`isEdge()` marks options that front the platform's own edge network rather than customer-owned custom domains. Filters compose, so narrowing to a single option is just a matter of adding another:
+
+```php
+$balancer
+    ->addFilter(fn (CdnOption $option): bool => $option->getProvider() === Provider::Fastly)
+    ->addFilter(fn (CdnOption $option): bool => $option->isEdge());
+```
+
+Failures are aggregated rather than short-circuiting: every matching option is attempted, then the collected errors are raised together as `Exception\Purge`, whose `getErrors()` returns one throwable per failed provider. A provider outage therefore cannot stop the purge from reaching the others. When no option matches the filters, the purge raises `Exception\Configuration` instead of passing silently.
+
+`CdnBalancer` also keeps the base balancer's `run()`, for callers that do want a single option chosen by an `Algorithm`.
 
 ### Cache routing
 

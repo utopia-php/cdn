@@ -8,6 +8,7 @@ use Utopia\Client;
 use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
 use Utopia\Cdn\Cache\Adapter;
 use Utopia\Cdn\Domain;
+use Utopia\Cdn\Exception\UnsupportedOperation;
 use Utopia\Psr7\Header;
 use Utopia\Psr7\Method;
 use Utopia\Psr7\Request\Factory as RequestFactory;
@@ -16,12 +17,16 @@ class Fastly implements Adapter
 {
     private ClientInterface $client;
 
+    /**
+     * @param string|null $domainKeyPrefix Prefix of the surrogate key the origin attaches per domain, used to purge one domain off a service shared by many. Null purges the whole service instead.
+     */
     public function __construct(
         private string $apiToken,
         private ?string $serviceId = null,
         private bool $softPurge = false,
         ?ClientInterface $client = null,
-        private string $apiBase = 'https://api.fastly.com'
+        private string $apiBase = 'https://api.fastly.com',
+        private ?string $domainKeyPrefix = null,
     ) {
         $this->client = $client ?? new Client(new CurlAdapter());
     }
@@ -46,11 +51,22 @@ class Fastly implements Adapter
     }
 
     /**
-     * Purges the entire configured service. The service is expected to be dedicated to the supplied domain.
+     * Purges one domain by surrogate key when a key prefix is configured, and otherwise the entire
+     * configured service, which then has to be dedicated to the supplied domain.
      */
     public function purgeDomain(string $domain): void
     {
-        Domain::validate($domain);
+        $domain = Domain::validate($domain);
+
+        // Purging a service that fronts many domains would evict every other
+        // domain on it, so prefer the per-domain surrogate key when the origin
+        // attaches one.
+        if ($this->domainKeyPrefix !== null) {
+            $this->purgeKeys([$this->domainKeyPrefix . $domain]);
+
+            return;
+        }
+
         $this->requireServiceId('domain purging');
 
         $result = $this->request(Method::POST, '/service/' . $this->serviceId . '/purge_all');
@@ -69,7 +85,9 @@ class Fastly implements Adapter
         $this->requireServiceId('cache key purging');
 
         foreach ($keys as $key) {
-            $result = $this->request(Method::POST, '/service/' . $this->serviceId . '/purge/' . $key);
+            // The key is a path segment of the purge URL, so it is encoded here
+            // rather than by every caller.
+            $result = $this->request(Method::POST, '/service/' . $this->serviceId . '/purge/' . \rawurlencode($key));
 
             if ($result['statusCode'] < 200 || $result['statusCode'] >= 300) {
                 throw new \RuntimeException($this->formatError($result));
@@ -77,10 +95,14 @@ class Fastly implements Adapter
         }
     }
 
+    /**
+     * Reported as an unsupported operation rather than a failure: a token without a service ID can
+     * still purge URLs, so a fan-out has to be able to skip this adapter and purge the others.
+     */
     private function requireServiceId(string $operation): void
     {
         if ($this->serviceId === null || $this->serviceId === '') {
-            throw new \RuntimeException('Fastly service ID is required for ' . $operation . '.');
+            throw new UnsupportedOperation('Fastly service ID is required for ' . $operation . '.');
         }
     }
 
