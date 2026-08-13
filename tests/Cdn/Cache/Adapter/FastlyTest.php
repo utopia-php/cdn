@@ -4,7 +4,6 @@ namespace Utopia\Tests\Cdn\Cache\Adapter;
 
 use PHPUnit\Framework\TestCase;
 use Utopia\Cdn\Cache\Adapter\Fastly;
-use Utopia\Cdn\Exception\UnsupportedOperation;
 use Utopia\Psr7\Response;
 use Utopia\Psr7\Stream;
 use Utopia\Tests\Cdn\TestClient;
@@ -26,26 +25,10 @@ class FastlyTest extends TestCase
         $this->assertSame('1', $client->headers['fastly-soft-purge'] ?? null);
     }
 
-    public function testEncodesCacheKeys(): void
-    {
-        $client = new TestClient([new Response(200, body: new Stream('{"status":"ok"}'))]);
-
-        (new Fastly('token', 'service-id', false, $client))->purgeKeys(['domain-example.com/a b']);
-
-        $this->assertSame('https://api.fastly.com/service/service-id/purge/domain-example.com%2Fa%20b', $client->calls[0]['url']);
-    }
-
     public function testDomainPurgeRequiresServiceId(): void
     {
-        $this->expectException(UnsupportedOperation::class);
+        $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('service ID');
         (new Fastly('token', null, false, new TestClient([])))->purgeDomain('example.com');
-    }
-
-    public function testKeyPurgeWithoutServiceIdIsUnsupportedRatherThanFailed(): void
-    {
-        // Lets a fan-out skip a URL-purge-only Fastly option and still purge the rest.
-        $this->expectException(UnsupportedOperation::class);
-        (new Fastly('token', null, false, new TestClient([])))->purgeKeys(['key']);
     }
 }

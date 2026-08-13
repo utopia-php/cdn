@@ -8,7 +8,6 @@ use Utopia\Client;
 use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
 use Utopia\Cdn\Cache\Adapter;
 use Utopia\Cdn\Domain;
-use Utopia\Cdn\Exception\UnsupportedOperation;
 use Utopia\Psr7\Header;
 use Utopia\Psr7\Method;
 use Utopia\Psr7\Request\Factory as RequestFactory;
@@ -70,9 +69,7 @@ class Fastly implements Adapter
         $this->requireServiceId('cache key purging');
 
         foreach ($keys as $key) {
-            // The key is a path segment of the purge URL, so it is encoded here
-            // rather than by every caller.
-            $result = $this->request(Method::POST, '/service/' . $this->serviceId . '/purge/' . \rawurlencode($key));
+            $result = $this->request(Method::POST, '/service/' . $this->serviceId . '/purge/' . $key);
 
             if ($result['statusCode'] < 200 || $result['statusCode'] >= 300) {
                 throw new \RuntimeException($this->formatError($result));
@@ -80,14 +77,10 @@ class Fastly implements Adapter
         }
     }
 
-    /**
-     * Reported as an unsupported operation rather than a failure: a token without a service ID can
-     * still purge URLs, so a fan-out has to be able to skip this adapter and purge the others.
-     */
     private function requireServiceId(string $operation): void
     {
         if ($this->serviceId === null || $this->serviceId === '') {
-            throw new UnsupportedOperation('Fastly service ID is required for ' . $operation . '.');
+            throw new \RuntimeException('Fastly service ID is required for ' . $operation . '.');
         }
     }
 

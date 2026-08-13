@@ -76,15 +76,11 @@ $cache->purgeKeys([
 ]);
 ```
 
-Fastly domain purges invalidate the entire configured service. Use one domain per Fastly service when calling `purgeDomain()`.
-
-Cache keys are encoded by the adapter, so pass them raw. A Fastly adapter with no service ID can still purge paths; key and domain purges raise `Exception\UnsupportedOperation`, which lets the balancer below skip it and purge the remaining providers.
-
-Cloudflare hostname purging depends on the cache-purge features enabled for your plan.
+Fastly domain purges invalidate the entire configured service. Use one domain per Fastly service when calling `purgeDomain()`. Cloudflare hostname purging depends on the cache-purge features enabled for your plan.
 
 ### Cache balancing
 
-`Cache\Adapter\Balancer` turns provider selection into configuration. Every provider is declared once as an option, filters decide which options a purge applies to, and the purge then reaches **all** of them — a domain cached by two providers has to be evicted from both.
+`Cache\Adapter\Balancer` turns provider selection into configuration. Every provider is declared once as an option, filters decide which options a purge applies to, and the purge then reaches **all** of them — content cached by two providers has to be evicted from both.
 
 Options are `Extend\CdnOption`, a [utopia-php/balancer](https://github.com/utopia-php/balancer) `Option` with typed accessors, so a filter reads `$option->getProvider()` rather than guessing a state key. The balancer itself is the library's own, unwrapped:
 
@@ -110,7 +106,8 @@ $balancer->addFilter(fn (CdnOption $option): bool => !$option->isEdge());
 
 $cache = new Cache(new BalancerAdapter($balancer));
 
-$cache->purgeDomain('customer.example.com');
+// One call, two providers: a Fastly surrogate key purge and a Cloudflare cache-tag purge.
+$cache->purgeKeys(['domain-customer.example.com']);
 ```
 
 `isEdge()` marks options that front the platform's own edge network rather than customer-owned custom domains. Filters compose, so narrowing to a single option is just a matter of adding another:
