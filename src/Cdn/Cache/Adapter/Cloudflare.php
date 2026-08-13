@@ -16,15 +16,15 @@ use Utopia\Psr7\Request\Factory as RequestFactory;
 class Cloudflare implements Adapter
 {
     /**
-     * URLs per purge request, kept to the lowest figure Cloudflare documents.
-     *
-     * Their pages disagree: the purge overview says 100 URLs per request (500 on Enterprise), while
-     * the purge-by-hostname page says 30 items at a time. The smaller number is within both.
+     * URLs per purge request. Names the batch size this adapter has always used rather than
+     * changing it: Cloudflare documents 100 URLs per request, 500 on Enterprise, so 30 is within
+     * every plan and can be raised deliberately.
      */
     public const int PATHS_PER_PURGE = 30;
 
     /**
-     * Cache tags per purge request, on the same reading as PATHS_PER_PURGE.
+     * Cache tags per purge request. Cloudflare documents 100 operations per request for tags on
+     * every plan; 30 is what this adapter has always sent.
      */
     public const int KEYS_PER_PURGE = 30;
 

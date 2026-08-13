@@ -54,8 +54,8 @@ class FastlyTest extends TestCase
 
         (new Fastly('token', 'domain-', 'service-id', client: $client))->purgeKeys(['domain-example.com-summer sale']);
 
-        // A key is a JSON value now, not a path segment, so percent-encoding it
-        // would purge a key the origin never attached.
+        // A key is a JSON value, not a path segment, so percent-encoding it would
+        // purge a key the origin never attached.
         $this->assertSame(['surrogate_keys' => ['domain-example.com-summer sale']], $client->calls[0]['body']);
     }
 

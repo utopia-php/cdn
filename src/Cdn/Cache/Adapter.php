@@ -30,8 +30,8 @@ interface Adapter
      * Purges everything the adapter is configured for, whatever domain it belongs to.
      *
      * The widest operation a provider offers: Cloudflare's purge_everything for the zone, Fastly's
-     * purge_all for the service. Expensive and, for both providers, disruptive to origin — reach for
-     * purgeDomain() or purgeKeys() unless the whole cache really has to go.
+     * purge_all for the service. Everything cached is then re-fetched from origin, including all the
+     * content that did not need to be, so reach for purgeDomain() or purgeKeys() first.
      */
     public function purgeZone(): void;
 }

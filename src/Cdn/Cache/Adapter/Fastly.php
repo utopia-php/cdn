@@ -16,11 +16,6 @@ use Utopia\Psr7\Request\Factory as RequestFactory;
 class Fastly implements Adapter
 {
     /**
-     * A URL purge addresses exactly one cached URL.
-     */
-    public const int PATHS_PER_PURGE = 1;
-
-    /**
      * Fastly's documented ceiling for one batch surrogate key purge.
      */
     public const int KEYS_PER_PURGE = 256;
@@ -51,6 +46,10 @@ class Fastly implements Adapter
         $domain = Domain::validate($domain);
         $paths = Domain::validatePaths($paths);
 
+        if ($paths === []) {
+            return;
+        }
+
         // A URL purge carries one URL, so there is nothing to batch.
         foreach ($paths as $path) {
             $this->send(Method::POST, '/purge/' . $domain . $this->encodePath($path));
@@ -73,8 +72,8 @@ class Fastly implements Adapter
 
         $this->requireServiceId('cache key purging');
 
-        // Keys travel in the request body, so they are sent as given: no encoding,
-        // and up to 256 of them per request instead of one request each.
+        // Keys travel in the request body rather than the URL, so they are sent as
+        // given: percent-encoding one would purge a key the origin never attached.
         foreach (\array_chunk($keys, self::KEYS_PER_PURGE) as $chunk) {
             $this->send(Method::POST, '/service/' . $this->serviceId . '/purge', ['surrogate_keys' => $chunk]);
         }

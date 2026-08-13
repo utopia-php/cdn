@@ -39,18 +39,16 @@ class AdapterTest extends TestCase
         }
     }
 
-    public function testProviderAdaptersNameTheirBatchCeilingsAlike(): void
+    public function testBatchCeilingsAreNamedAlikeWhereBothProvidersBatch(): void
     {
-        // Same names, provider-specific numbers: Fastly batches 256 keys per request
-        // and purges one URL at a time, Cloudflare takes 30 of either.
+        // Same name either side, provider-specific number behind it. Fastly batches
+        // keys and purges URLs one at a time, so only Cloudflare names a path ceiling.
         foreach ([Fastly::class, Cloudflare::class] as $adapter) {
-            $this->assertTrue(\defined($adapter . '::PATHS_PER_PURGE'), $adapter . ' must declare PATHS_PER_PURGE');
             $this->assertTrue(\defined($adapter . '::KEYS_PER_PURGE'), $adapter . ' must declare KEYS_PER_PURGE');
         }
 
-        $this->assertSame(1, Fastly::PATHS_PER_PURGE);
         $this->assertSame(256, Fastly::KEYS_PER_PURGE);
-        $this->assertSame(30, Cloudflare::PATHS_PER_PURGE);
         $this->assertSame(30, Cloudflare::KEYS_PER_PURGE);
+        $this->assertSame(30, Cloudflare::PATHS_PER_PURGE);
     }
 }
