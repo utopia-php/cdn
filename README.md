@@ -80,7 +80,7 @@ Fastly domain purges invalidate the entire configured service. Use one domain pe
 
 ### Cache routing
 
-`Cache\Adapter\Proxy` routes the application domain to one adapter, configured network domains to another, and fans custom domains out to every custom adapter.
+`Cache\Adapter\Proxy` routes domain and path purges: it sends the application domain to one adapter, configured network domains to another, and fans custom domains out to every custom adapter.
 
 ```php
 use Utopia\Cdn\Cache\Adapter\Proxy;
@@ -92,6 +92,17 @@ $cache = new Cache(new Proxy(
     customDomainAdapters: [$cloudflareCache, $fastlyCache],
     networkDomains: ['network.example.com'],
 ));
+```
+
+Cache keys and tags are scoped to a Fastly service or Cloudflare zone. Consequently, `Proxy` does not route `purgeKeys()` calls. The consuming application must select the adapter using its own routing context before constructing `Cache`:
+
+```php
+$adapter = $cdnAdapterResolver->resolve($rule);
+
+$cache = new Cache($adapter);
+$cache->purgeKeys([
+    'domain-' . \strtolower($domain),
+]);
 ```
 
 ## Certificates

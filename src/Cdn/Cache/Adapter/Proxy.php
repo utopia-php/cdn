@@ -53,19 +53,9 @@ class Proxy implements Adapter
             return;
         }
 
-        $purged = false;
-        foreach ($this->all() as $adapter) {
-            try {
-                $adapter->purgeKeys($keys);
-                $purged = true;
-            } catch (UnsupportedOperation) {
-                continue;
-            }
-        }
-
-        if (!$purged) {
-            throw new UnsupportedOperation('Cache key purging is not supported by any configured adapter.');
-        }
+        throw new UnsupportedOperation(
+            'Cache key purging cannot be routed by domain. Select the service or zone adapter before purging keys.'
+        );
     }
 
     /** @return array<int, Adapter> */
@@ -84,18 +74,5 @@ class Proxy implements Adapter
         }
 
         return $this->customDomainAdapters;
-    }
-
-    /** @return array<int, Adapter> */
-    private function all(): array
-    {
-        $adapters = [$this->appDomainAdapter, $this->networkAdapter, ...$this->customDomainAdapters];
-        $unique = [];
-
-        foreach ($adapters as $adapter) {
-            $unique[\spl_object_id($adapter)] = $adapter;
-        }
-
-        return \array_values($unique);
     }
 }
