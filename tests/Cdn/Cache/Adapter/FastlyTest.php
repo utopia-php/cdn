@@ -73,20 +73,26 @@ class FastlyTest extends TestCase
         $this->assertSame(['key-257'], $client->calls[1]['body']['surrogate_keys']);
     }
 
-    public function testServicePurgeIsItsOwnOperation(): void
+    public function testZonePurgeIsItsOwnOperation(): void
     {
         $client = new TestClient([$this->ok()]);
 
-        (new Fastly('token', 'domain-', 'service-id', client: $client))->purgeService();
+        (new Fastly('token', 'domain-', 'service-id', client: $client))->purgeZone();
 
         $this->assertSame('https://api.fastly.com/service/service-id/purge_all', $client->calls[0]['url']);
     }
 
-    public function testServicePurgeIsNotReachableThroughTheAdapterInterface(): void
+    public function testZonePurgeIsNotReachableThroughTheAdapterInterface(): void
     {
         // purge_all cannot be soft purged and spikes origin traffic, so no caller
         // asking to purge a domain, a path or a key can end up triggering it.
-        $this->assertNotContains('purgeService', \get_class_methods(Adapter::class));
+        $this->assertNotContains('purgeZone', \get_class_methods(Adapter::class));
+    }
+
+    public function testZonePurgeRequiresServiceId(): void
+    {
+        $this->expectException(UnsupportedOperation::class);
+        (new Fastly('token', 'domain-', null, false, new TestClient([])))->purgeZone();
     }
 
     public function testKeyPurgeRequiresServiceId(): void

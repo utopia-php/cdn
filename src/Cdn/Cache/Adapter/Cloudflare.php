@@ -2,28 +2,37 @@
 
 namespace Utopia\Cdn\Cache\Adapter;
 
-use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
-use Utopia\Client;
-use Utopia\Client\Adapter\Curl\Client as CurlAdapter;
-use Utopia\Cdn\Cache\Adapter;
+use Psr\Http\Message\RequestInterface;
 use Utopia\Cdn\Domain;
-use Utopia\Psr7\ContentType;
 use Utopia\Psr7\Header;
 use Utopia\Psr7\Method;
-use Utopia\Psr7\Request\Factory as RequestFactory;
 
-class Cloudflare implements Adapter
+class Cloudflare extends Api
 {
-    private ClientInterface $client;
+    /**
+     * Items per purge request, kept to the lowest figure Cloudflare documents.
+     *
+     * Their pages disagree: the purge overview tables say 100 operations per request for tags,
+     * hostnames and prefixes and 100 URLs for single-file purge (500 on Enterprise), while the
+     * purge-by-hostname page says 30 hostnames at a time. Defaulting to the smaller number is
+     * within both; raise it through the constructor if your plan and reading say otherwise.
+     */
+    public const int ITEMS_PER_PURGE = 30;
 
+    protected const string USER_AGENT = 'Utopia CDN Cloudflare Adapter';
+
+    /**
+     * @param positive-int $itemsPerPurge How many URLs, hostnames or cache tags one purge request may carry.
+     */
     public function __construct(
         private string $zoneId,
         private string $apiToken,
         ?ClientInterface $client = null,
-        private string $apiBase = 'https://api.cloudflare.com/client/v4'
+        string $apiBase = 'https://api.cloudflare.com/client/v4',
+        private int $itemsPerPurge = self::ITEMS_PER_PURGE,
     ) {
-        $this->client = $client ?? new Client(new CurlAdapter());
+        parent::__construct($client, $apiBase);
     }
 
     public function purgePaths(string $domain, array $paths): void
@@ -35,42 +44,17 @@ class Cloudflare implements Adapter
             return;
         }
 
-        foreach (\array_chunk($paths, 30) as $chunk) {
-            $urls = \array_map(fn (string $path): string => 'https://' . $domain . $path, $chunk);
-            $result = $this->request(
-                method: Method::POST,
-                url: '/zones/' . $this->zoneId . '/purge_cache',
-                body: ['files' => $urls],
-            );
-
-            if (!$this->isSuccess($result)) {
-                throw new \RuntimeException($this->formatError('Cloudflare', $result));
-            }
-        }
-    }
-
-    public function purgeDomain(string $domain): void
-    {
-        $result = $this->request(
-            method: Method::POST,
-            url: '/zones/' . $this->zoneId . '/purge_cache',
-            body: ['hosts' => [Domain::validate($domain)]],
-        );
-
-        if (!$this->isSuccess($result)) {
-            throw new \RuntimeException($this->formatError('Cloudflare', $result));
-        }
+        $this->batch($paths, $this->itemsPerPurge, function (array $chunk) use ($domain): void {
+            $this->purge(['files' => \array_map(static fn (string $path): string => 'https://' . $domain . $path, $chunk)]);
+        });
     }
 
     /**
-     * @param array{statusCode:int,response:array<string, mixed>|string|null,error:string|null} $result
+     * Purges every cached response served for the hostname, and nothing served for another.
      */
-    private function isSuccess(array $result): bool
+    public function purgeDomain(string $domain): void
     {
-        return $result['statusCode'] >= 200
-            && $result['statusCode'] < 300
-            && \is_array($result['response'])
-            && ($result['response']['success'] ?? false) === true;
+        $this->purge(['hosts' => [Domain::validate($domain)]]);
     }
 
     public function purgeKeys(array $keys): void
@@ -79,23 +63,47 @@ class Cloudflare implements Adapter
             return;
         }
 
-        foreach (\array_chunk($keys, 30) as $chunk) {
-            $result = $this->request(
-                method: Method::POST,
-                url: '/zones/' . $this->zoneId . '/purge_cache',
-                body: ['tags' => $chunk],
-            );
-
-            if (!$this->isSuccess($result)) {
-                throw new \RuntimeException($this->formatError('Cloudflare', $result));
-            }
-        }
+        // Cache tags only match responses the origin tagged with a Cache-Tag header.
+        $this->batch($keys, $this->itemsPerPurge, function (array $chunk): void {
+            $this->purge(['tags' => $chunk]);
+        });
     }
 
     /**
-     * @param array{statusCode:int,response:array<string, mixed>|string|null,error:string|null} $result
+     * Purges every cached response in the zone, whatever hostname it was served for.
+     *
+     * Deliberately absent from the Adapter interface, for the same reason as its Fastly
+     * counterpart: no caller asking to purge a domain, a path or a key means this.
      */
-    private function formatError(string $provider, array $result): string
+    public function purgeZone(): void
+    {
+        $this->purge(['purge_everything' => true]);
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     */
+    private function purge(array $body): void
+    {
+        $this->send(Method::POST, '/zones/' . $this->zoneId . '/purge_cache', $body);
+    }
+
+    protected function authenticate(RequestInterface $request): RequestInterface
+    {
+        return $request->withHeader(Header::AUTHORIZATION, 'Bearer ' . $this->apiToken);
+    }
+
+    /**
+     * A 2xx is not enough: Cloudflare reports a rejected purge in the body.
+     */
+    protected function isSuccess(array $result): bool
+    {
+        return $this->isHttpSuccess($result)
+            && \is_array($result['response'])
+            && ($result['response']['success'] ?? false) === true;
+    }
+
+    protected function formatError(array $result): string
     {
         $message = $result['error'] ?? null;
 
@@ -105,35 +113,6 @@ class Cloudflare implements Adapter
 
         $message ??= 'Unknown purge error';
 
-        return $provider . ' purge failed with status ' . $result['statusCode'] . ': ' . $message;
-    }
-
-    /**
-     * @param array<string, mixed>|null $body
-     * @return array{statusCode:int,response:array<string, mixed>|string|null,error:string|null}
-     */
-    private function request(string $method, string $url, ?array $body = null): array
-    {
-        $request = (new RequestFactory())->json($method, $this->apiBase . $url, $body);
-        $request = $request
-            ->withHeader(Header::USER_AGENT, 'Utopia CDN Cloudflare Adapter')
-            ->withHeader(Header::AUTHORIZATION, 'Bearer ' . $this->apiToken)
-            ->withHeader(Header::CONTENT_TYPE, ContentType::JSON);
-
-        try {
-            $response = $this->client->sendRequest($request);
-        } catch (ClientExceptionInterface $error) {
-            return ['statusCode' => 0, 'response' => null, 'error' => $error->getMessage()];
-        }
-
-        $contents = (string) $response->getBody();
-
-        try {
-            $decoded = \json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
-            $decoded = $contents;
-        }
-
-        return ['statusCode' => $response->getStatusCode(), 'response' => $decoded, 'error' => null];
+        return 'Cloudflare purge failed with status ' . $result['statusCode'] . ': ' . $message;
     }
 }
