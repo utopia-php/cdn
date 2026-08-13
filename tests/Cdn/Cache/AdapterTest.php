@@ -5,6 +5,7 @@ namespace Utopia\Tests\Cdn\Cache;
 use PHPUnit\Framework\TestCase;
 use Utopia\Cdn\Cache;
 use Utopia\Cdn\Cache\Adapter;
+use Utopia\Cdn\Cache\Adapter\Balancer;
 use Utopia\Cdn\Cache\Adapter\Cloudflare;
 use Utopia\Cdn\Cache\Adapter\Fastly;
 
@@ -21,7 +22,9 @@ class AdapterTest extends TestCase
     {
         $this->assertSame(self::OPERATIONS, \get_class_methods(Adapter::class));
 
-        foreach ([Fastly::class, Cloudflare::class] as $adapter) {
+        // Balancer included: a composite adapter that lagged the interface would
+        // silently stop forwarding whichever operation it had not caught up with.
+        foreach ([Fastly::class, Cloudflare::class, Balancer::class] as $adapter) {
             $this->assertContains(Adapter::class, \class_implements($adapter), $adapter . ' must implement the adapter interface');
 
             foreach (self::OPERATIONS as $operation) {

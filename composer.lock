@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "9d8e3f40f0ec1f09031e899e6c3ca55c",
+    "content-hash": "448aa1f9f6b4a04d151922aa2a1c1a0b",
     "packages": [
         {
             "name": "brick/math",
@@ -1876,6 +1876,54 @@
                 "source": "https://github.com/Nevay/spi/tree/v1.0.5"
             },
             "time": "2025-06-29T15:42:06+00:00"
+        },
+        {
+            "name": "utopia-php/balancer",
+            "version": "0.4.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/utopia-php/balancer.git",
+                "reference": "7fc8922da3e381c227cd88435cb12b17040c6ee1"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/utopia-php/balancer/zipball/7fc8922da3e381c227cd88435cb12b17040c6ee1",
+                "reference": "7fc8922da3e381c227cd88435cb12b17040c6ee1",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.1",
+                "utopia-php/telemetry": "^0.4.0"
+            },
+            "require-dev": {
+                "laravel/pint": "1.2.*",
+                "phpstan/phpstan": "^1.8",
+                "phpunit/phpunit": "^9.3"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Utopia\\Balancer\\": "src/Balancer"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "A simple library to balance choices between multiple options.",
+            "keywords": [
+                "balancer",
+                "balancing",
+                "framework",
+                "php",
+                "upf",
+                "utopia"
+            ],
+            "support": {
+                "issues": "https://github.com/utopia-php/balancer/issues",
+                "source": "https://github.com/utopia-php/balancer/tree/0.4.1"
+            },
+            "time": "2026-08-13T19:36:49+00:00"
         },
         {
             "name": "utopia-php/client",
