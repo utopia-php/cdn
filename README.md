@@ -76,18 +76,7 @@ $cache->purgeKeys([
 ]);
 ```
 
-Fastly domain purges invalidate the entire configured service, so use one domain per Fastly service when calling `purgeDomain()`. When a service fronts many domains and the origin tags every response with a per-domain surrogate key, pass `domainKeyPrefix` instead and `purgeDomain()` purges that key rather than the whole service:
-
-```php
-$cache = new Cache(new Fastly(
-    apiToken: 'YOUR_API_TOKEN',
-    serviceId: 'YOUR_SHARED_SERVICE_ID',
-    domainKeyPrefix: 'domain-'
-));
-
-// Purges the surrogate key "domain-example.com", leaving other domains cached.
-$cache->purgeDomain('example.com');
-```
+Fastly domain purges invalidate the entire configured service. Use one domain per Fastly service when calling `purgeDomain()`.
 
 Cache keys are encoded by the adapter, so pass them raw. A Fastly adapter with no service ID can still purge paths; key and domain purges raise `Exception\UnsupportedOperation`, which lets the balancer below skip it and purge the remaining providers.
 
@@ -112,8 +101,8 @@ use Utopia\Cdn\Extend\CdnOption;
 use Utopia\Cdn\Provider;
 
 $balancer = (new Balancer(new First()))
-    ->addOption(new CdnOption(new Fastly($token, $edgeServiceId, domainKeyPrefix: 'domain-'), Provider::FASTLY, edge: true))
-    ->addOption(new CdnOption(new Fastly($token, $runServiceId, domainKeyPrefix: 'domain-'), Provider::FASTLY))
+    ->addOption(new CdnOption(new Fastly($token, $edgeServiceId), Provider::FASTLY, edge: true))
+    ->addOption(new CdnOption(new Fastly($token, $runServiceId), Provider::FASTLY))
     ->addOption(new CdnOption(new Cloudflare($zoneId, $token), Provider::CLOUDFLARE));
 
 // Custom domains are cached by the run service and by Cloudflare, so purge both.

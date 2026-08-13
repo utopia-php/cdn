@@ -17,16 +17,12 @@ class Fastly implements Adapter
 {
     private ClientInterface $client;
 
-    /**
-     * @param string|null $domainKeyPrefix Prefix of the surrogate key the origin attaches per domain, used to purge one domain off a service shared by many. Null purges the whole service instead.
-     */
     public function __construct(
         private string $apiToken,
         private ?string $serviceId = null,
         private bool $softPurge = false,
         ?ClientInterface $client = null,
-        private string $apiBase = 'https://api.fastly.com',
-        private ?string $domainKeyPrefix = null,
+        private string $apiBase = 'https://api.fastly.com'
     ) {
         $this->client = $client ?? new Client(new CurlAdapter());
     }
@@ -51,22 +47,11 @@ class Fastly implements Adapter
     }
 
     /**
-     * Purges one domain by surrogate key when a key prefix is configured, and otherwise the entire
-     * configured service, which then has to be dedicated to the supplied domain.
+     * Purges the entire configured service. The service is expected to be dedicated to the supplied domain.
      */
     public function purgeDomain(string $domain): void
     {
-        $domain = Domain::validate($domain);
-
-        // Purging a service that fronts many domains would evict every other
-        // domain on it, so prefer the per-domain surrogate key when the origin
-        // attaches one.
-        if ($this->domainKeyPrefix !== null) {
-            $this->purgeKeys([$this->domainKeyPrefix . $domain]);
-
-            return;
-        }
-
+        Domain::validate($domain);
         $this->requireServiceId('domain purging');
 
         $result = $this->request(Method::POST, '/service/' . $this->serviceId . '/purge_all');

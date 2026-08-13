@@ -35,17 +35,6 @@ class FastlyTest extends TestCase
         $this->assertSame('https://api.fastly.com/service/service-id/purge/domain-example.com%2Fa%20b', $client->calls[0]['url']);
     }
 
-    public function testDomainPurgeUsesSurrogateKeyWhenPrefixIsConfigured(): void
-    {
-        $client = new TestClient([new Response(200, body: new Stream('{"status":"ok"}'))]);
-
-        (new Fastly('token', 'service-id', false, $client, domainKeyPrefix: 'domain-'))->purgeDomain('example.com');
-
-        // A shared service must not be purged wholesale, so the per-domain key is purged instead.
-        $this->assertSame('https://api.fastly.com/service/service-id/purge/domain-example.com', $client->calls[0]['url']);
-        $this->assertCount(1, $client->calls);
-    }
-
     public function testDomainPurgeRequiresServiceId(): void
     {
         $this->expectException(UnsupportedOperation::class);
