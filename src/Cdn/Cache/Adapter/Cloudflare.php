@@ -95,16 +95,25 @@ class Cloudflare implements Adapter
     }
 
     /**
-     * A 2xx is not enough: Cloudflare reports a rejected purge in the body.
+     * The status line is the primary signal, as it is for Fastly. Cloudflare's
+     * envelope carries its own verdict, and an explicit `success: false` inside
+     * a 2xx is still a rejected purge — but a 2xx without the envelope is
+     * acceptance, so a body a gateway rewrote or a test double never sent does
+     * not fail a purge the status line already confirmed.
      *
      * @param array{statusCode:int,response:array<string, mixed>|string|null,error:string|null} $result
      */
     private function isSuccess(array $result): bool
     {
-        return $result['statusCode'] >= 200
-            && $result['statusCode'] < 300
-            && \is_array($result['response'])
-            && ($result['response']['success'] ?? false) === true;
+        if ($result['statusCode'] < 200 || $result['statusCode'] >= 300) {
+            return false;
+        }
+
+        if (\is_array($result['response']) && \array_key_exists('success', $result['response'])) {
+            return $result['response']['success'] === true;
+        }
+
+        return true;
     }
 
     /**

@@ -68,11 +68,32 @@ class CloudflareTest extends TestCase
 
     public function testRejectsAPurgeTheBodyReportsAsFailed(): void
     {
-        // A 2xx alone does not mean the purge happened.
+        // The envelope's explicit verdict wins over the 2xx it travels in.
         $client = new TestClient([new Response(200, body: new Stream('{"success":false,"errors":[{"message":"Invalid zone"}]}'))]);
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Cloudflare purge failed with status 200: Invalid zone');
+        (new Cloudflare('zone', 'token', $client))->purgeDomain('example.com');
+    }
+
+    public function testAcceptsAPurgeWithoutTheEnvelope(): void
+    {
+        // A 2xx with no envelope is acceptance, like Fastly: the status line is
+        // the primary signal and only an explicit `success: false` overrides it.
+        $client = new TestClient([new Response(200, body: new Stream(''))]);
+
+        (new Cloudflare('zone', 'token', $client))->purgeDomain('example.com');
+
+        $this->assertSame(['hosts' => ['example.com']], $client->calls[0]['body']);
+    }
+
+    public function testRejectsAPurgeTheStatusReportsAsFailed(): void
+    {
+        // The reverse does not hold: no envelope softens a failing status.
+        $client = new TestClient([new Response(403, body: new Stream('{"success":false,"errors":[{"message":"Forbidden"}]}'))]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Cloudflare purge failed with status 403: Forbidden');
         (new Cloudflare('zone', 'token', $client))->purgeDomain('example.com');
     }
 
